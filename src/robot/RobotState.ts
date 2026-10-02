@@ -8,6 +8,9 @@
 /** The four cardinal directions the robot can face. */
 export type Direction = 'NORTH' | 'SOUTH' | 'EAST' | 'WEST';
 
+/** Valid robot commands. */
+export type RobotCommand = 'MOVE_FORWARD' | 'MOVE_BACKWARD' | 'TURN_LEFT' | 'TURN_RIGHT';
+
 /** The robot's state on the grid. */
 export interface RobotState {
   x: number;

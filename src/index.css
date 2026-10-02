@@ -72,3 +72,52 @@ code {
   font-size: 0.85rem;
   color: #555;
 }
+
+/* ── Controls & Status ────────────────────────────── */
+
+#controlsPane {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  justify-content: center;
+}
+
+#controlsPane button {
+  padding: 0.4rem 1.2rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+}
+
+#runBtn {
+  background-color: #4CAF50;
+  color: #fff;
+  border-color: #4CAF50;
+  font-weight: bold;
+}
+
+#runBtn:hover {
+  background-color: #43a047;
+}
+
+#resetBtn:hover {
+  background-color: #f5f5f5;
+}
+
+#statusMessage {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  text-align: center;
+  color: #555;
+  min-height: 1.2em;
+}
+
+#statusMessage.error {
+  color: #c62828;
+}
+
+#statusMessage.success {
+  color: #2e7d32;
+}
