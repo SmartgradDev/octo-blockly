@@ -17,6 +17,32 @@ export const toolbox = {
   contents: [
     {
       kind: 'category',
+      name: 'Robotics',
+      colour: '210',
+      contents: [
+        {
+          kind: 'block',
+          type: 'octo_move_forward',
+        },
+        {
+          kind: 'block',
+          type: 'octo_move_backward',
+        },
+        {
+          kind: 'block',
+          type: 'octo_turn_left',
+        },
+        {
+          kind: 'block',
+          type: 'octo_turn_right',
+        },
+      ],
+    },
+    {
+      kind: 'sep',
+    },
+    {
+      kind: 'category',
       name: 'Logic',
       categorystyle: 'logic_category',
       contents: [

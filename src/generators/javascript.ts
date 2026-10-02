@@ -25,10 +25,42 @@ forBlock['add_text'] = function (
   const outputDiv = document.getElementById('output');
   const textEl = document.createElement('p');
   textEl.innerText = text;
-  outputDiv.appendChild(textEl);ddd
+  outputDiv.appendChild(textEl);
 }`,
   );
   // Generate the function call for this block.
   const code = `${addText}(${text});\n`;
   return code;
+};
+
+// ── Robotics block generators ───────────────────────────────────────
+// Each block generates a simple command string constant.
+// These are not executed yet — a future simulator will consume them.
+
+forBlock['octo_move_forward'] = function (
+  _block: Blockly.Block,
+  _generator: Blockly.CodeGenerator,
+) {
+  return "'MOVE_FORWARD';\n";
+};
+
+forBlock['octo_move_backward'] = function (
+  _block: Blockly.Block,
+  _generator: Blockly.CodeGenerator,
+) {
+  return "'MOVE_BACKWARD';\n";
+};
+
+forBlock['octo_turn_left'] = function (
+  _block: Blockly.Block,
+  _generator: Blockly.CodeGenerator,
+) {
+  return "'TURN_LEFT';\n";
+};
+
+forBlock['octo_turn_right'] = function (
+  _block: Blockly.Block,
+  _generator: Blockly.CodeGenerator,
+) {
+  return "'TURN_RIGHT';\n";
 };
