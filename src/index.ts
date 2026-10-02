@@ -11,12 +11,23 @@ import {forBlock} from './generators/javascript';
 import {javascriptGenerator} from 'blockly/javascript';
 import {save, load} from './serialization';
 import {toolbox} from './toolbox';
+import {createRobotState, GridConfig} from './robot/RobotState';
+import {renderGrid} from './robot/GridRenderer';
 import './index.css';
 
 // Register the blocks and generator with Blockly
 Blockly.common.defineBlocks(blocks);
 Blockly.common.defineBlocks(robotBlocks);
 Object.assign(javascriptGenerator.forBlock, forBlock);
+
+// ── Robot simulator: initial state ──────────────────────────────────
+const grid: GridConfig = {width: 5, height: 5};
+const robot = createRobotState(0, 0, 'EAST');
+
+const simulatorPane = document.getElementById('simulatorPane');
+if (simulatorPane) {
+  renderGrid(simulatorPane, grid, robot);
+}
 
 // Set up UI elements and inject Blockly
 const codeDiv = document.getElementById('generatedCode')?.firstChild;

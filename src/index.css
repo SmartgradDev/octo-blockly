@@ -38,3 +38,37 @@ code {
 #output {
   height: 50%;
 }
+
+/* ── Robot Grid Simulator ─────────────────────────── */
+
+#simulatorPane {
+  padding: 0.5rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.robot-grid {
+  border-collapse: collapse;
+  margin: 0 auto;
+}
+
+.robot-grid-cell {
+  width: 48px;
+  height: 48px;
+  border: 1px solid #ccc;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 16px;
+  background-color: #f9f9f9;
+}
+
+.robot-cell {
+  background-color: #e3f2fd;
+}
+
+.robot-status {
+  text-align: center;
+  margin-top: 0.5rem;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #555;
+}
