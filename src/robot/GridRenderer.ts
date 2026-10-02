@@ -9,6 +9,7 @@
  */
 
 import {Direction, GridConfig, RobotState} from './RobotState';
+import {TargetPosition} from './Mission';
 
 /** Maps a direction to a visual indicator shown alongside the robot. */
 function directionArrow(dir: Direction): string {
@@ -25,7 +26,7 @@ function directionArrow(dir: Direction): string {
 }
 
 /**
- * Render the grid + robot into the given container element.
+ * Render the grid + robot + target into the given container element.
  *
  * This function replaces the container's innerHTML each time it is
  * called — simple and stateless.
@@ -34,6 +35,7 @@ export function renderGrid(
   container: HTMLElement,
   grid: GridConfig,
   robot: RobotState,
+  target?: TargetPosition,
 ): void {
   const table = document.createElement('table');
   table.className = 'robot-grid';
@@ -46,9 +48,21 @@ export function renderGrid(
       const td = document.createElement('td');
       td.className = 'robot-grid-cell';
 
-      if (col === robot.x && row === robot.y) {
+      const isRobot = col === robot.x && row === robot.y;
+      const isTarget = target && col === target.x && row === target.y;
+
+      if (isTarget) {
+        td.classList.add('target-cell');
+      }
+
+      if (isRobot && isTarget) {
+        td.classList.add('robot-cell', 'robot-on-target');
+        td.textContent = '🤖⭐';
+      } else if (isRobot) {
         td.classList.add('robot-cell');
         td.textContent = '🤖' + directionArrow(robot.direction);
+      } else if (isTarget) {
+        td.textContent = '⭐';
       }
 
       tr.appendChild(td);

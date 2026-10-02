@@ -14,6 +14,8 @@ import {toolbox} from './toolbox';
 import {createRobotState, GridConfig} from './robot/RobotState';
 import {renderGrid} from './robot/GridRenderer';
 import {extractCommands, executeCommand} from './robot/CommandExecutor';
+import {FIRST_MISSION, Mission} from './robot/Mission';
+import {calculateScore} from './robot/ScoringEngine';
 import './index.css';
 
 // Register the blocks and generator with Blockly
@@ -21,13 +23,26 @@ Blockly.common.defineBlocks(blocks);
 Blockly.common.defineBlocks(robotBlocks);
 Object.assign(javascriptGenerator.forBlock, forBlock);
 
-// ── Robot simulator: initial state ──────────────────────────────────
-const grid: GridConfig = {width: 5, height: 5};
-const robot = createRobotState(0, 0, 'EAST');
+// ── Active Mission Configuration ────────────────────────────────────
+const currentMission: Mission = FIRST_MISSION;
+const grid: GridConfig = {
+  width: currentMission.gridSize,
+  height: currentMission.gridSize,
+};
+const robot = createRobotState(
+  currentMission.start.x,
+  currentMission.start.y,
+  currentMission.start.direction,
+);
+
+const missionTitleEl = document.getElementById('missionTitle');
+if (missionTitleEl) {
+  missionTitleEl.textContent = `Mission: ${currentMission.title}`;
+}
 
 const simulatorPane = document.getElementById('simulatorPane');
 if (simulatorPane) {
-  renderGrid(simulatorPane, grid, robot);
+  renderGrid(simulatorPane, grid, robot, currentMission.target);
 }
 
 // Set up UI elements and inject Blockly
@@ -59,6 +74,13 @@ let stopRequested = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Helper to check if robot has reached mission target
+const isTargetReached = (): boolean => {
+  return (
+    robot.x === currentMission.target.x && robot.y === currentMission.target.y
+  );
+};
+
 // ── Run: extract commands from blocks, execute sequentially with delay
 const runProgram = async () => {
   if (isRunning) return;
@@ -68,11 +90,13 @@ const runProgram = async () => {
   const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
   if (runBtn) runBtn.disabled = true;
 
-  // Reset robot to initial state before starting run.
-  robot.x = 0;
-  robot.y = 0;
-  robot.direction = 'EAST';
-  if (simulatorPane) renderGrid(simulatorPane, grid, robot);
+  // Reset robot to initial mission state before starting run.
+  robot.x = currentMission.start.x;
+  robot.y = currentMission.start.y;
+  robot.direction = currentMission.start.direction;
+  if (simulatorPane) {
+    renderGrid(simulatorPane, grid, robot, currentMission.target);
+  }
 
   const commands = extractCommands(ws as Blockly.Workspace);
 
@@ -85,8 +109,9 @@ const runProgram = async () => {
 
   setStatus(`Starting execution of ${commands.length} command(s)...`);
 
+  const startTime = performance.now();
   let hadError = false;
-  let executedCount = 0;
+  let targetReached = isTargetReached();
 
   for (let i = 0; i < commands.length; i++) {
     if (stopRequested) {
@@ -96,13 +121,38 @@ const runProgram = async () => {
 
     const cmd = commands[i];
     const result = executeCommand(robot, grid, cmd);
-    executedCount++;
 
-    if (simulatorPane) renderGrid(simulatorPane, grid, robot);
+    if (simulatorPane) {
+      renderGrid(simulatorPane, grid, robot, currentMission.target);
+    }
 
     if (!result.ok) {
       hadError = true;
-      setStatus(`Step ${i + 1}/${commands.length} (${cmd}): ${result.message}`, 'error');
+      setStatus(
+        `Step ${i + 1}/${commands.length} (${cmd}): ${result.message}`,
+        'error',
+      );
+      break;
+    }
+
+    if (isTargetReached()) {
+      targetReached = true;
+      const elapsedTimeMs = performance.now() - startTime;
+      const scoreResult = calculateScore({
+        completed: true,
+        commandCount: commands.length,
+        timeMs: elapsedTimeMs,
+        optimalCommandCount: 9,
+      });
+
+      setStatus(
+        `🎉 Mission Complete!\n` +
+          `Rating: ${scoreResult.starDisplay} (${scoreResult.stars} ${scoreResult.stars === 1 ? 'star' : 'stars'})\n` +
+          `Score: ${scoreResult.score}\n` +
+          `Commands: ${scoreResult.commandCount}\n` +
+          `Time: ${scoreResult.timeSeconds}s`,
+        'success',
+      );
       break;
     } else {
       setStatus(`Step ${i + 1}/${commands.length} (${cmd}): ${result.message}`);
@@ -112,10 +162,9 @@ const runProgram = async () => {
     await delay(400);
   }
 
-  if (!stopRequested && !hadError) {
+  if (!stopRequested && !hadError && !targetReached) {
     setStatus(
-      `Finished executing all ${executedCount} command(s) successfully!`,
-      'success',
+      `Robot stopped at (${robot.x}, ${robot.y}), but hasn't reached the star yet. Try again!`,
     );
   }
 
@@ -131,11 +180,13 @@ const resetRobot = () => {
   const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
   if (runBtn) runBtn.disabled = false;
 
-  robot.x = 0;
-  robot.y = 0;
-  robot.direction = 'EAST';
-  if (simulatorPane) renderGrid(simulatorPane, grid, robot);
-  setStatus('Robot reset to (0, 0) EAST.');
+  robot.x = currentMission.start.x;
+  robot.y = currentMission.start.y;
+  robot.direction = currentMission.start.direction;
+  if (simulatorPane) {
+    renderGrid(simulatorPane, grid, robot, currentMission.target);
+  }
+  setStatus('Mission reset. Program the robot to reach the star!');
 };
 
 // ── Wire up buttons ─────────────────────────────────────────────────

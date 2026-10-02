@@ -107,17 +107,48 @@ code {
 }
 
 #statusMessage {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.85rem;
+  padding: 0.5rem;
+  font-size: 0.9rem;
   text-align: center;
   color: #555;
   min-height: 1.2em;
+  white-space: pre-line;
+  line-height: 1.4;
 }
 
 #statusMessage.error {
   color: #c62828;
+  background-color: #ffebee;
+  border: 1px solid #ef9a9a;
+  border-radius: 4px;
+  margin: 0.25rem 0.5rem;
 }
 
 #statusMessage.success {
-  color: #2e7d32;
+  color: #1b5e20;
+  background-color: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 4px;
+  margin: 0.25rem 0.5rem;
+  font-weight: 500;
+}
+
+/* ── Mission & Target Styles ───────────────────────── */
+
+#missionTitle {
+  margin: 0;
+  padding: 0.5rem 0 0.25rem 0;
+  font-size: 1.1rem;
+  text-align: center;
+  color: #333;
+}
+
+.target-cell {
+  background-color: #fffde7;
+  border-color: #ffd54f;
+  font-size: 18px;
+}
+
+.robot-on-target {
+  background-color: #c8e6c9;
 }
