@@ -64,3 +64,10 @@ forBlock['octo_turn_right'] = function (
 ) {
   return "'TURN_RIGHT';\n";
 };
+
+forBlock['octo_obstacle_ahead'] = function (
+  _block: Blockly.Block,
+  _generator: Blockly.CodeGenerator,
+) {
+  return ['isObstacleAhead()', Order.ATOMIC];
+};

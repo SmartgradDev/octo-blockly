@@ -36,6 +36,10 @@ export const toolbox = {
           kind: 'block',
           type: 'octo_turn_right',
         },
+        {
+          kind: 'block',
+          type: 'octo_obstacle_ahead',
+        },
       ],
     },
     {

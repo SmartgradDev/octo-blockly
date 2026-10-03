@@ -13,7 +13,7 @@ import {save, load} from './serialization';
 import {toolbox} from './toolbox';
 import {createRobotState, GridConfig} from './robot/RobotState';
 import {renderGrid} from './robot/GridRenderer';
-import {extractCommands, executeCommand} from './robot/CommandExecutor';
+import {executeCommand, ProgramInterpreter} from './robot/CommandExecutor';
 import {MISSIONS, Mission} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
 import './index.css';
@@ -129,7 +129,7 @@ if (missionSelect) {
 // Load initial mission
 loadMission(currentMission);
 
-// ── Run: extract commands from blocks, execute sequentially with delay
+// ── Run: step-by-step dynamic AST interpretation & execution ────────
 const runProgram = async () => {
   if (isRunning) return;
   isRunning = true;
@@ -152,38 +152,43 @@ const runProgram = async () => {
     );
   }
 
-  const {commands, limitExceeded} = extractCommands(ws as Blockly.Workspace);
+  const interpreter = new ProgramInterpreter(
+    ws as Blockly.Workspace,
+    robot,
+    grid,
+    currentMission.obstacles,
+  );
 
-  if (limitExceeded) {
-    setStatus(
-      '⚠️ Program limit exceeded! Maximum 500 robot commands per run.',
-      'error',
-    );
-    isRunning = false;
-    if (runBtn) runBtn.disabled = false;
-    return;
-  }
-
-  if (commands.length === 0) {
-    setStatus('No robot commands found. Drag some blocks!');
-    isRunning = false;
-    if (runBtn) runBtn.disabled = false;
-    return;
-  }
-
-  setStatus(`Starting execution of ${commands.length} command(s)...`);
+  setStatus('Starting execution...');
 
   const startTime = performance.now();
   let hadError = false;
   let targetReached = isTargetReached();
 
-  for (let i = 0; i < commands.length; i++) {
+  while (!interpreter.isDone()) {
     if (stopRequested) {
       setStatus('Execution stopped.', 'error');
       break;
     }
 
-    const cmd = commands[i];
+    const stepResult = interpreter.step();
+
+    if (stepResult.limitExceeded) {
+      hadError = true;
+      setStatus(
+        '⚠️ Program limit exceeded! Maximum 500 robot commands per run.',
+        'error',
+      );
+      break;
+    }
+
+    if (!stepResult.command) {
+      continue;
+    }
+
+    const cmd = stepResult.command;
+    const executedCount = interpreter.getExecutedCommandCount();
+
     const result = executeCommand(
       robot,
       grid,
@@ -204,7 +209,7 @@ const runProgram = async () => {
     if (!result.ok) {
       hadError = true;
       setStatus(
-        `Step ${i + 1}/${commands.length} (${cmd}): ${result.message}`,
+        `Step ${executedCount} (${cmd}): ${result.message}`,
         'error',
       );
       break;
@@ -215,7 +220,7 @@ const runProgram = async () => {
       const elapsedTimeMs = performance.now() - startTime;
       const scoreResult = calculateScore({
         completed: true,
-        commandCount: commands.length,
+        commandCount: executedCount,
         timeMs: elapsedTimeMs,
         optimalCommandCount: currentMission.optimalCommandCount,
       });
@@ -230,14 +235,18 @@ const runProgram = async () => {
       );
       break;
     } else {
-      setStatus(`Step ${i + 1}/${commands.length} (${cmd}): ${result.message}`);
+      setStatus(`Step ${executedCount} (${cmd}): ${result.message}`);
     }
 
     // Delay 400ms between steps for visual animation
     await delay(400);
   }
 
-  if (!stopRequested && !hadError && !targetReached) {
+  const totalExecuted = interpreter.getExecutedCommandCount();
+
+  if (totalExecuted === 0 && !hadError && !stopRequested) {
+    setStatus('No robot commands found. Drag some blocks!');
+  } else if (!stopRequested && !hadError && !targetReached) {
     setStatus(
       `Robot stopped at (${robot.x}, ${robot.y}), but hasn't reached the star yet. Try again!`,
     );

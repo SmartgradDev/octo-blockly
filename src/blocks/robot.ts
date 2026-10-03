@@ -1,11 +1,12 @@
 /**
  * Robotics block definitions for octo-blockly.
  *
- * Defines four simple statement blocks for controlling a robot:
+ * Defines movement statement blocks and sensor value blocks for controlling a robot:
  * - octo_move_forward
  * - octo_move_backward
  * - octo_turn_left
  * - octo_turn_right
+ * - octo_obstacle_ahead (Front Obstacle Sensor)
  *
  * This file has no side effects — blocks must be registered
  * separately via Blockly.common.defineBlocks().
@@ -53,9 +54,19 @@ const octoTurnRight = {
   helpUrl: '',
 };
 
+const octoObstacleAhead = {
+  type: 'octo_obstacle_ahead',
+  message0: '🧱 obstacle ahead?',
+  output: 'Boolean',
+  colour: 120,
+  tooltip: 'Returns true if an obstacle or grid boundary is directly in front of the robot.',
+  helpUrl: '',
+};
+
 export const robotBlocks = Blockly.common.createBlockDefinitionsFromJsonArray([
   octoMoveForward,
   octoMoveBackward,
   octoTurnLeft,
   octoTurnRight,
+  octoObstacleAhead,
 ]);

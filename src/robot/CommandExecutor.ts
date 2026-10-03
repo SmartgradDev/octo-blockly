@@ -1,10 +1,9 @@
 /**
- * CommandExecutor — extracts robot commands from the Blockly workspace
- * and executes them against a RobotState.
+ * CommandExecutor — AST Interpreter & Robot Command Execution Engine
  *
- * Recursively interprets Blockly block structures (including loops)
- * without using eval() or new Function().
- * Supports obstacle collision checking without hardcoding obstacle positions.
+ * Dynamically interprets Blockly block structures (including loops and IF/ELSE conditionals)
+ * at runtime without using eval() or new Function().
+ * Supports dynamic sensor evaluation, obstacle collision checking, and max command limits.
  *
  * No DOM dependencies — this is pure logic.
  */
@@ -23,74 +22,179 @@ const BLOCK_TO_COMMAND: Record<string, RobotCommand> = {
 
 export const MAX_COMMANDS_LIMIT = 500;
 
-export interface ExtractCommandsResult {
-  commands: RobotCommand[];
+export interface StepResult {
+  command: RobotCommand | null;
+  done: boolean;
   limitExceeded: boolean;
 }
 
-/**
- * Walk top-level blocks in the workspace and recursively interpret
- * commands and loops into a flat command sequence.
- */
-export function extractCommands(
-  workspace: Blockly.Workspace,
-  maxLimit: number = MAX_COMMANDS_LIMIT,
-): ExtractCommandsResult {
-  const commands: RobotCommand[] = [];
-  const topBlocks = workspace.getTopBlocks(true);
-  let limitExceeded = false;
-
-  for (const topBlock of topBlocks) {
-    if (limitExceeded) break;
-    limitExceeded = walkBlockChain(topBlock, commands, maxLimit);
-  }
-
-  return {commands, limitExceeded};
+interface StackFrame {
+  block: Blockly.Block | null;
+  repeatCount?: number;
+  currentIteration?: number;
+  bodyBlock?: Blockly.Block | null;
 }
 
 /**
- * Recursively walk a statement chain of blocks.
- * Returns true if maxLimit was exceeded during walking.
+ * ProgramInterpreter — Step-by-step AST Interpreter for Blockly robot programs.
+ * Evaluates conditions dynamically at runtime against current robot state.
  */
-function walkBlockChain(
-  firstBlock: Blockly.Block | null,
-  commands: RobotCommand[],
-  maxLimit: number,
-): boolean {
-  let block: Blockly.Block | null = firstBlock;
+export class ProgramInterpreter {
+  private stack: StackFrame[] = [];
+  private robot: RobotState;
+  private grid: GridConfig;
+  private obstacles?: Position[];
+  private commandCount: number = 0;
+  private maxCommands: number;
 
-  while (block) {
-    if (commands.length >= maxLimit) {
-      return true;
+  constructor(
+    workspace: Blockly.Workspace,
+    robot: RobotState,
+    grid: GridConfig,
+    obstacles?: Position[],
+    maxCommands: number = MAX_COMMANDS_LIMIT,
+  ) {
+    this.robot = robot;
+    this.grid = grid;
+    this.obstacles = obstacles;
+    this.maxCommands = maxCommands;
+
+    const topBlocks = workspace.getTopBlocks(true);
+    // Push top blocks in reverse order so they execute top-to-bottom
+    for (let i = topBlocks.length - 1; i >= 0; i--) {
+      this.stack.push({block: topBlocks[i]});
     }
+  }
 
-    const type = block.type;
+  public isDone(): boolean {
+    return this.stack.length === 0;
+  }
 
-    if (type in BLOCK_TO_COMMAND) {
-      commands.push(BLOCK_TO_COMMAND[type]);
-    } else if (type === 'controls_repeat_ext' || type === 'controls_repeat') {
-      const repeatCount = getRepeatCount(block);
-      const bodyBlock = block.getInputTargetBlock('DO');
+  public getExecutedCommandCount(): number {
+    return this.commandCount;
+  }
 
-      for (let i = 0; i < repeatCount; i++) {
-        if (commands.length >= maxLimit) {
-          return true;
+  /**
+   * Advance the interpreter by one step.
+   * Returns a RobotCommand if an action block was reached, or command: null if a control block was evaluated.
+   */
+  public step(): StepResult {
+    while (this.stack.length > 0) {
+      const frame = this.stack[this.stack.length - 1];
+
+      if (!frame.block) {
+        // Frame statement chain is finished
+        if (
+          frame.repeatCount !== undefined &&
+          frame.currentIteration !== undefined
+        ) {
+          frame.currentIteration++;
+          if (frame.currentIteration < frame.repeatCount) {
+            // Restart loop body for next iteration
+            frame.block = frame.bodyBlock || null;
+            continue;
+          }
         }
-        if (bodyBlock) {
-          const exceeded = walkBlockChain(bodyBlock, commands, maxLimit);
-          if (exceeded) return true;
+        // Pop finished frame
+        this.stack.pop();
+        continue;
+      }
+
+      const currentBlock = frame.block;
+      // Advance frame pointer to next block in current chain
+      frame.block = currentBlock.getNextBlock();
+
+      const type = currentBlock.type;
+
+      if (type in BLOCK_TO_COMMAND) {
+        if (this.commandCount >= this.maxCommands) {
+          return {command: null, done: true, limitExceeded: true};
+        }
+        this.commandCount++;
+        return {
+          command: BLOCK_TO_COMMAND[type],
+          done: false,
+          limitExceeded: false,
+        };
+      } else if (type === 'controls_repeat_ext' || type === 'controls_repeat') {
+        const repeatCount = getRepeatCount(currentBlock);
+        const bodyBlock = currentBlock.getInputTargetBlock('DO');
+        if (repeatCount > 0 && bodyBlock) {
+          this.stack.push({
+            block: bodyBlock,
+            bodyBlock: bodyBlock,
+            repeatCount,
+            currentIteration: 0,
+          });
+        }
+      } else if (type === 'controls_if') {
+        const branchBlock = getIfBranch(
+          currentBlock,
+          this.robot,
+          this.grid,
+          this.obstacles,
+        );
+        if (branchBlock) {
+          this.stack.push({block: branchBlock});
         }
       }
     }
 
-    block = block.getNextBlock();
+    return {command: null, done: true, limitExceeded: false};
+  }
+}
+
+/**
+ * Dynamically evaluate an IF condition attached to a controls_if block.
+ */
+function evaluateCondition(
+  condBlock: Blockly.Block | null,
+  robot: RobotState,
+  grid: GridConfig,
+  obstacles?: Position[],
+): boolean {
+  if (!condBlock) return false;
+
+  if (condBlock.type === 'octo_obstacle_ahead') {
+    return isObstacleAhead(robot, grid, obstacles);
+  }
+
+  if (condBlock.type === 'logic_negate') {
+    const innerCond = condBlock.getInputTargetBlock('BOOL');
+    return !evaluateCondition(innerCond, robot, grid, obstacles);
   }
 
   return false;
 }
 
 /**
- * Safely extract the numeric repeat count from a repeat block.
+ * Determine which branch of a controls_if block to execute based on runtime condition evaluation.
+ */
+function getIfBranch(
+  ifBlock: Blockly.Block,
+  robot: RobotState,
+  grid: GridConfig,
+  obstacles?: Position[],
+): Blockly.Block | null {
+  let i = 0;
+  while (true) {
+    const condInput = ifBlock.getInputTargetBlock(`IF${i}`);
+    if (!condInput && i > 0) break;
+    if (condInput) {
+      if (evaluateCondition(condInput, robot, grid, obstacles)) {
+        return ifBlock.getInputTargetBlock(`DO${i}`);
+      }
+    } else if (i === 0) {
+      break;
+    }
+    i++;
+  }
+
+  return ifBlock.getInputTargetBlock('ELSE');
+}
+
+/**
+ * Safely extract numeric repeat count from repeat blocks.
  */
 function getRepeatCount(block: Blockly.Block): number {
   if (block.type === 'controls_repeat') {
@@ -98,7 +202,6 @@ function getRepeatCount(block: Blockly.Block): number {
     return isNaN(val) ? 0 : Math.max(0, Math.floor(val));
   }
 
-  // controls_repeat_ext
   const timesBlock = block.getInputTargetBlock('TIMES');
   if (timesBlock) {
     const val = Number(timesBlock.getFieldValue('NUM'));
@@ -117,9 +220,7 @@ function getRepeatCount(block: Blockly.Block): number {
 
 /** Result of executing a single command. */
 export interface ExecuteResult {
-  /** Whether the command was applied successfully. */
   ok: boolean;
-  /** Human-readable message (e.g. wall-hit warning). */
   message: string;
 }
 
@@ -135,8 +236,30 @@ export function isBlocked(x: number, y: number, obstacles?: Position[]): boolean
 }
 
 /**
+ * Front Obstacle Sensor:
+ * Checks if the cell directly in front of the robot is blocked by an obstacle
+ * or is outside the grid boundary.
+ *
+ * Does NOT move the robot or mutate robot state.
+ */
+export function isObstacleAhead(
+  robot: RobotState,
+  grid: GridConfig,
+  obstacles?: Position[],
+): boolean {
+  const delta = directionDelta(robot.direction);
+  const frontX = robot.x + delta.dx;
+  const frontY = robot.y + delta.dy;
+
+  if (frontX < 0 || frontX >= grid.width || frontY < 0 || frontY >= grid.height) {
+    return true;
+  }
+
+  return isBlocked(frontX, frontY, obstacles);
+}
+
+/**
  * Execute a single command, mutating the given RobotState in place.
- * The grid config and optional obstacles array are used for movement validation.
  */
 export function executeCommand(
   robot: RobotState,
@@ -156,10 +279,6 @@ export function executeCommand(
   }
 }
 
-/**
- * Move the robot one step forward (+1) or backward (−1) relative
- * to its current direction.
- */
 function move(
   robot: RobotState,
   grid: GridConfig,
@@ -170,12 +289,10 @@ function move(
   const newX = robot.x + delta.dx * step;
   const newY = robot.y + delta.dy * step;
 
-  // 1. Grid boundary check
   if (newX < 0 || newX >= grid.width || newY < 0 || newY >= grid.height) {
     return {ok: false, message: `Can't move — boundary at (${newX}, ${newY})!`};
   }
 
-  // 2. Obstacle check
   if (isBlocked(newX, newY, obstacles)) {
     return {ok: false, message: `Can't move — obstacle at (${newX}, ${newY})!`};
   }
@@ -185,14 +302,12 @@ function move(
   return {ok: true, message: `Moved to (${robot.x}, ${robot.y})`};
 }
 
-/** Rotate: dir = +1 for clockwise (right), −1 for counter-clockwise (left). */
 function turn(robot: RobotState, dir: 1 | -1): ExecuteResult {
   const idx = TURN_ORDER.indexOf(robot.direction);
   robot.direction = TURN_ORDER[(idx + dir + 4) % 4];
   return {ok: true, message: `Turned to face ${robot.direction}`};
 }
 
-/** Unit delta for a given direction. Y increases downward. */
 function directionDelta(dir: Direction): {dx: number; dy: number} {
   switch (dir) {
     case 'NORTH':
