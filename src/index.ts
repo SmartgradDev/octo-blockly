@@ -93,7 +93,13 @@ const loadMission = (mission: Mission) => {
   if (missionDescEl) missionDescEl.textContent = mission.description;
 
   if (simulatorPane) {
-    renderGrid(simulatorPane, grid, robot, mission.target);
+    renderGrid(
+      simulatorPane,
+      grid,
+      robot,
+      mission.target,
+      mission.obstacles,
+    );
   }
 
   const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
@@ -137,7 +143,13 @@ const runProgram = async () => {
   robot.y = currentMission.start.y;
   robot.direction = currentMission.start.direction;
   if (simulatorPane) {
-    renderGrid(simulatorPane, grid, robot, currentMission.target);
+    renderGrid(
+      simulatorPane,
+      grid,
+      robot,
+      currentMission.target,
+      currentMission.obstacles,
+    );
   }
 
   const {commands, limitExceeded} = extractCommands(ws as Blockly.Workspace);
@@ -172,10 +184,21 @@ const runProgram = async () => {
     }
 
     const cmd = commands[i];
-    const result = executeCommand(robot, grid, cmd);
+    const result = executeCommand(
+      robot,
+      grid,
+      cmd,
+      currentMission.obstacles,
+    );
 
     if (simulatorPane) {
-      renderGrid(simulatorPane, grid, robot, currentMission.target);
+      renderGrid(
+        simulatorPane,
+        grid,
+        robot,
+        currentMission.target,
+        currentMission.obstacles,
+      );
     }
 
     if (!result.ok) {
@@ -236,7 +259,13 @@ const resetRobot = () => {
   robot.y = currentMission.start.y;
   robot.direction = currentMission.start.direction;
   if (simulatorPane) {
-    renderGrid(simulatorPane, grid, robot, currentMission.target);
+    renderGrid(
+      simulatorPane,
+      grid,
+      robot,
+      currentMission.target,
+      currentMission.obstacles,
+    );
   }
   setStatus('Mission reset. Program the robot to reach the star!');
 };

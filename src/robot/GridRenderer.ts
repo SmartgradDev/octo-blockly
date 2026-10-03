@@ -1,15 +1,15 @@
 /**
- * GridRenderer — renders a 2D grid with a robot into a DOM container.
+ * GridRenderer — renders a 2D grid with a robot, target, and obstacles into a DOM container.
  *
  * Uses a plain HTML table for maximum simplicity (no canvas, no
  * game engine). Each cell is a <td>. The robot is shown as an emoji
- * with a directional arrow.
+ * with a directional arrow. Obstacles are rendered as rock icons.
  *
- * This module reads RobotState/GridConfig but never mutates them.
+ * This module reads RobotState/GridConfig/Position but never mutates them.
  */
 
 import {Direction, GridConfig, RobotState} from './RobotState';
-import {TargetPosition} from './Mission';
+import {Position, TargetPosition} from './Mission';
 
 /** Maps a direction to a visual indicator shown alongside the robot. */
 function directionArrow(dir: Direction): string {
@@ -26,7 +26,7 @@ function directionArrow(dir: Direction): string {
 }
 
 /**
- * Render the grid + robot + target into the given container element.
+ * Render the grid + robot + target + obstacles into the given container element.
  *
  * This function replaces the container's innerHTML each time it is
  * called — simple and stateless.
@@ -36,6 +36,7 @@ export function renderGrid(
   grid: GridConfig,
   robot: RobotState,
   target?: TargetPosition,
+  obstacles?: Position[],
 ): void {
   const table = document.createElement('table');
   table.className = 'robot-grid';
@@ -50,19 +51,23 @@ export function renderGrid(
 
       const isRobot = col === robot.x && row === robot.y;
       const isTarget = target && col === target.x && row === target.y;
+      const isObstacle =
+        obstacles && obstacles.some((o) => o.x === col && o.y === row);
 
-      if (isTarget) {
+      if (isObstacle) {
+        td.classList.add('obstacle-cell');
+        td.textContent = isRobot ? '🤖🪨' : '🪨';
+      } else if (isTarget) {
         td.classList.add('target-cell');
-      }
-
-      if (isRobot && isTarget) {
-        td.classList.add('robot-cell', 'robot-on-target');
-        td.textContent = '🤖⭐';
+        if (isRobot) {
+          td.classList.add('robot-cell', 'robot-on-target');
+          td.textContent = '🤖⭐';
+        } else {
+          td.textContent = '⭐';
+        }
       } else if (isRobot) {
         td.classList.add('robot-cell');
         td.textContent = '🤖' + directionArrow(robot.direction);
-      } else if (isTarget) {
-        td.textContent = '⭐';
       }
 
       tr.appendChild(td);

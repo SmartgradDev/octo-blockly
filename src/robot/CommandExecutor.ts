@@ -4,12 +4,14 @@
  *
  * Recursively interprets Blockly block structures (including loops)
  * without using eval() or new Function().
+ * Supports obstacle collision checking without hardcoding obstacle positions.
  *
  * No DOM dependencies — this is pure logic.
  */
 
 import * as Blockly from 'blockly/core';
 import {Direction, GridConfig, RobotCommand, RobotState} from './RobotState';
+import {Position} from './Mission';
 
 /** Map from Blockly block type to RobotCommand. */
 const BLOCK_TO_COMMAND: Record<string, RobotCommand> = {
@@ -125,19 +127,28 @@ export interface ExecuteResult {
 const TURN_ORDER: Direction[] = ['NORTH', 'EAST', 'SOUTH', 'WEST'];
 
 /**
+ * Check if a cell coordinate is blocked by an obstacle.
+ */
+export function isBlocked(x: number, y: number, obstacles?: Position[]): boolean {
+  if (!obstacles || obstacles.length === 0) return false;
+  return obstacles.some((o) => o.x === x && o.y === y);
+}
+
+/**
  * Execute a single command, mutating the given RobotState in place.
- * The grid config is used for bounds checking.
+ * The grid config and optional obstacles array are used for movement validation.
  */
 export function executeCommand(
   robot: RobotState,
   grid: GridConfig,
   command: RobotCommand,
+  obstacles?: Position[],
 ): ExecuteResult {
   switch (command) {
     case 'MOVE_FORWARD':
-      return move(robot, grid, 1);
+      return move(robot, grid, 1, obstacles);
     case 'MOVE_BACKWARD':
-      return move(robot, grid, -1);
+      return move(robot, grid, -1, obstacles);
     case 'TURN_LEFT':
       return turn(robot, -1);
     case 'TURN_RIGHT':
@@ -149,13 +160,24 @@ export function executeCommand(
  * Move the robot one step forward (+1) or backward (−1) relative
  * to its current direction.
  */
-function move(robot: RobotState, grid: GridConfig, step: number): ExecuteResult {
+function move(
+  robot: RobotState,
+  grid: GridConfig,
+  step: number,
+  obstacles?: Position[],
+): ExecuteResult {
   const delta = directionDelta(robot.direction);
   const newX = robot.x + delta.dx * step;
   const newY = robot.y + delta.dy * step;
 
+  // 1. Grid boundary check
   if (newX < 0 || newX >= grid.width || newY < 0 || newY >= grid.height) {
-    return {ok: false, message: `Can't move — wall at (${newX}, ${newY})!`};
+    return {ok: false, message: `Can't move — boundary at (${newX}, ${newY})!`};
+  }
+
+  // 2. Obstacle check
+  if (isBlocked(newX, newY, obstacles)) {
+    return {ok: false, message: `Can't move — obstacle at (${newX}, ${newY})!`};
   }
 
   robot.x = newX;
