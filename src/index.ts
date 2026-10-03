@@ -14,7 +14,7 @@ import {toolbox} from './toolbox';
 import {createRobotState, GridConfig} from './robot/RobotState';
 import {renderGrid} from './robot/GridRenderer';
 import {extractCommands, executeCommand} from './robot/CommandExecutor';
-import {FIRST_MISSION, Mission} from './robot/Mission';
+import {MISSIONS, Mission} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
 import './index.css';
 
@@ -23,8 +23,8 @@ Blockly.common.defineBlocks(blocks);
 Blockly.common.defineBlocks(robotBlocks);
 Object.assign(javascriptGenerator.forBlock, forBlock);
 
-// ── Active Mission Configuration ────────────────────────────────────
-const currentMission: Mission = FIRST_MISSION;
+// ── Active Mission State & Configuration ────────────────────────────
+let currentMission: Mission = MISSIONS[0];
 const grid: GridConfig = {
   width: currentMission.gridSize,
   height: currentMission.gridSize,
@@ -35,15 +35,10 @@ const robot = createRobotState(
   currentMission.start.direction,
 );
 
-const missionTitleEl = document.getElementById('missionTitle');
-if (missionTitleEl) {
-  missionTitleEl.textContent = `Mission: ${currentMission.title}`;
-}
-
 const simulatorPane = document.getElementById('simulatorPane');
-if (simulatorPane) {
-  renderGrid(simulatorPane, grid, robot, currentMission.target);
-}
+const missionTitleEl = document.getElementById('missionTitle');
+const missionDescEl = document.getElementById('missionDescription');
+const missionSelect = document.getElementById('missionSelect') as HTMLSelectElement | null;
 
 // Set up UI elements and inject Blockly
 const codeDiv = document.getElementById('generatedCode')?.firstChild;
@@ -80,6 +75,53 @@ const isTargetReached = (): boolean => {
     robot.x === currentMission.target.x && robot.y === currentMission.target.y
   );
 };
+
+// ── Helper: Load & switch mission ───────────────────────────────────
+const loadMission = (mission: Mission) => {
+  stopRequested = true;
+  isRunning = false;
+
+  currentMission = mission;
+  grid.width = mission.gridSize;
+  grid.height = mission.gridSize;
+
+  robot.x = mission.start.x;
+  robot.y = mission.start.y;
+  robot.direction = mission.start.direction;
+
+  if (missionTitleEl) missionTitleEl.textContent = mission.title;
+  if (missionDescEl) missionDescEl.textContent = mission.description;
+
+  if (simulatorPane) {
+    renderGrid(simulatorPane, grid, robot, mission.target);
+  }
+
+  const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
+  if (runBtn) runBtn.disabled = false;
+
+  setStatus(`Loaded ${mission.title}. Program the robot!`);
+};
+
+// Populate Mission Selector Dropdown
+if (missionSelect) {
+  missionSelect.innerHTML = '';
+  MISSIONS.forEach((m, idx) => {
+    const opt = document.createElement('option');
+    opt.value = idx.toString();
+    opt.textContent = m.title;
+    missionSelect.appendChild(opt);
+  });
+
+  missionSelect.addEventListener('change', (e) => {
+    const idx = parseInt((e.target as HTMLSelectElement).value, 10);
+    if (MISSIONS[idx]) {
+      loadMission(MISSIONS[idx]);
+    }
+  });
+}
+
+// Load initial mission
+loadMission(currentMission);
 
 // ── Run: extract commands from blocks, execute sequentially with delay
 const runProgram = async () => {
@@ -142,7 +184,7 @@ const runProgram = async () => {
         completed: true,
         commandCount: commands.length,
         timeMs: elapsedTimeMs,
-        optimalCommandCount: 9,
+        optimalCommandCount: currentMission.optimalCommandCount,
       });
 
       setStatus(
