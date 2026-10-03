@@ -14,7 +14,7 @@ import {toolbox} from './toolbox';
 import {createRobotState, GridConfig} from './robot/RobotState';
 import {renderGrid} from './robot/GridRenderer';
 import {executeCommand, ProgramInterpreter} from './robot/CommandExecutor';
-import {MISSIONS, Mission} from './robot/Mission';
+import {getMissionsByPhase, Mission} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
 import './index.css';
 
@@ -24,7 +24,9 @@ Blockly.common.defineBlocks(robotBlocks);
 Object.assign(javascriptGenerator.forBlock, forBlock);
 
 // ── Active Mission State & Configuration ────────────────────────────
-let currentMission: Mission = MISSIONS[0];
+let currentPhaseMissions: Mission[] = getMissionsByPhase(1);
+let currentMission: Mission = currentPhaseMissions[0];
+
 const grid: GridConfig = {
   width: currentMission.gridSize,
   height: currentMission.gridSize,
@@ -38,6 +40,7 @@ const robot = createRobotState(
 const simulatorPane = document.getElementById('simulatorPane');
 const missionTitleEl = document.getElementById('missionTitle');
 const missionDescEl = document.getElementById('missionDescription');
+const phaseSelect = document.getElementById('phaseSelect') as HTMLSelectElement | null;
 const missionSelect = document.getElementById('missionSelect') as HTMLSelectElement | null;
 
 // Set up UI elements and inject Blockly
@@ -108,26 +111,43 @@ const loadMission = (mission: Mission) => {
   setStatus(`Loaded ${mission.title}. Program the robot!`);
 };
 
-// Populate Mission Selector Dropdown
-if (missionSelect) {
+// Helper to populate Mission Selector Dropdown for active phase
+const populateMissionDropdown = (missions: Mission[]) => {
+  if (!missionSelect) return;
   missionSelect.innerHTML = '';
-  MISSIONS.forEach((m, idx) => {
+  missions.forEach((m, idx) => {
     const opt = document.createElement('option');
     opt.value = idx.toString();
     opt.textContent = m.title;
     missionSelect.appendChild(opt);
   });
+};
 
-  missionSelect.addEventListener('change', (e) => {
-    const idx = parseInt((e.target as HTMLSelectElement).value, 10);
-    if (MISSIONS[idx]) {
-      loadMission(MISSIONS[idx]);
+// Wire up Phase / Level Selector (Novice vs Proficient)
+if (phaseSelect) {
+  phaseSelect.addEventListener('change', (e) => {
+    const phaseId = parseInt((e.target as HTMLSelectElement).value, 10);
+    currentPhaseMissions = getMissionsByPhase(phaseId);
+    populateMissionDropdown(currentPhaseMissions);
+    if (currentPhaseMissions.length > 0) {
+      loadMission(currentPhaseMissions[0]);
     }
   });
 }
 
-// Load initial mission
-loadMission(currentMission);
+// Wire up Mission Selector Dropdown
+if (missionSelect) {
+  missionSelect.addEventListener('change', (e) => {
+    const idx = parseInt((e.target as HTMLSelectElement).value, 10);
+    if (currentPhaseMissions[idx]) {
+      loadMission(currentPhaseMissions[idx]);
+    }
+  });
+}
+
+// Initial setup
+populateMissionDropdown(currentPhaseMissions);
+loadMission(currentPhaseMissions[0]);
 
 // ── Run: step-by-step dynamic AST interpretation & execution ────────
 const runProgram = async () => {

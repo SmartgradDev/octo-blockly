@@ -2,14 +2,15 @@
  * GridRenderer — renders a 2D grid with a robot, target, and obstacles into a DOM container.
  *
  * Uses a plain HTML table for maximum simplicity (no canvas, no
- * game engine). Each cell is a <td>. The robot is shown as an emoji
- * with a directional arrow. Obstacles are rendered as rock icons.
+ * game engine). Each cell is a <td>. The robot is rendered using the octopus icon image
+ * with a directional arrow indicator. Obstacles are rendered as rock icons.
  *
  * This module reads RobotState/GridConfig/Position but never mutates them.
  */
 
 import {Direction, GridConfig, RobotState} from './RobotState';
 import {Position, TargetPosition} from './Mission';
+import octopusIcon from '../assets/octopus-icon.png';
 
 /** Maps a direction to a visual indicator shown alongside the robot. */
 function directionArrow(dir: Direction): string {
@@ -23,6 +24,28 @@ function directionArrow(dir: Direction): string {
     case 'WEST':
       return '⬅';
   }
+}
+
+/**
+ * Creates a DOM wrapper containing the octopus icon image and direction arrow.
+ */
+function renderRobotElement(dir: Direction): HTMLElement {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'robot-icon-wrapper';
+
+  const img = document.createElement('img');
+  img.src = octopusIcon;
+  img.alt = 'Octopus Robot';
+  img.className = 'octopus-icon-img';
+
+  const arrow = document.createElement('span');
+  arrow.className = 'robot-direction-arrow';
+  arrow.textContent = directionArrow(dir);
+
+  wrapper.appendChild(img);
+  wrapper.appendChild(arrow);
+
+  return wrapper;
 }
 
 /**
@@ -56,18 +79,28 @@ export function renderGrid(
 
       if (isObstacle) {
         td.classList.add('obstacle-cell');
-        td.textContent = isRobot ? '🤖🪨' : '🪨';
+        if (isRobot) {
+          td.appendChild(renderRobotElement(robot.direction));
+          const rockSpan = document.createElement('span');
+          rockSpan.textContent = '🪨';
+          td.appendChild(rockSpan);
+        } else {
+          td.textContent = '🪨';
+        }
       } else if (isTarget) {
         td.classList.add('target-cell');
         if (isRobot) {
           td.classList.add('robot-cell', 'robot-on-target');
-          td.textContent = '🤖⭐';
+          td.appendChild(renderRobotElement(robot.direction));
+          const starSpan = document.createElement('span');
+          starSpan.textContent = '⭐';
+          td.appendChild(starSpan);
         } else {
           td.textContent = '⭐';
         }
       } else if (isRobot) {
         td.classList.add('robot-cell');
-        td.textContent = '🤖' + directionArrow(robot.direction);
+        td.appendChild(renderRobotElement(robot.direction));
       }
 
       tr.appendChild(td);
