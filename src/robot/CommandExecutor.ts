@@ -2,9 +2,8 @@
  * CommandExecutor — extracts robot commands from the Blockly workspace
  * and executes them against a RobotState.
  *
- * This module does NOT use eval() or new Function(). It walks the
- * Blockly block tree directly to build a safe command list, then
- * applies each command to the robot state.
+ * Recursively interprets Blockly block structures (including loops)
+ * without using eval() or new Function().
  *
  * No DOM dependencies — this is pure logic.
  */
@@ -20,26 +19,98 @@ const BLOCK_TO_COMMAND: Record<string, RobotCommand> = {
   octo_turn_right: 'TURN_RIGHT',
 };
 
+export const MAX_COMMANDS_LIMIT = 500;
+
+export interface ExtractCommandsResult {
+  commands: RobotCommand[];
+  limitExceeded: boolean;
+}
+
 /**
- * Walk the top-level blocks in the workspace and collect an ordered
- * list of robot commands. Non-robot blocks are silently skipped.
+ * Walk top-level blocks in the workspace and recursively interpret
+ * commands and loops into a flat command sequence.
  */
-export function extractCommands(workspace: Blockly.Workspace): RobotCommand[] {
+export function extractCommands(
+  workspace: Blockly.Workspace,
+  maxLimit: number = MAX_COMMANDS_LIMIT,
+): ExtractCommandsResult {
   const commands: RobotCommand[] = [];
   const topBlocks = workspace.getTopBlocks(true);
+  let limitExceeded = false;
 
   for (const topBlock of topBlocks) {
-    let block: Blockly.Block | null = topBlock;
-    while (block) {
-      const cmd = BLOCK_TO_COMMAND[block.type];
-      if (cmd) {
-        commands.push(cmd);
+    if (limitExceeded) break;
+    limitExceeded = walkBlockChain(topBlock, commands, maxLimit);
+  }
+
+  return {commands, limitExceeded};
+}
+
+/**
+ * Recursively walk a statement chain of blocks.
+ * Returns true if maxLimit was exceeded during walking.
+ */
+function walkBlockChain(
+  firstBlock: Blockly.Block | null,
+  commands: RobotCommand[],
+  maxLimit: number,
+): boolean {
+  let block: Blockly.Block | null = firstBlock;
+
+  while (block) {
+    if (commands.length >= maxLimit) {
+      return true;
+    }
+
+    const type = block.type;
+
+    if (type in BLOCK_TO_COMMAND) {
+      commands.push(BLOCK_TO_COMMAND[type]);
+    } else if (type === 'controls_repeat_ext' || type === 'controls_repeat') {
+      const repeatCount = getRepeatCount(block);
+      const bodyBlock = block.getInputTargetBlock('DO');
+
+      for (let i = 0; i < repeatCount; i++) {
+        if (commands.length >= maxLimit) {
+          return true;
+        }
+        if (bodyBlock) {
+          const exceeded = walkBlockChain(bodyBlock, commands, maxLimit);
+          if (exceeded) return true;
+        }
       }
-      block = block.getNextBlock();
+    }
+
+    block = block.getNextBlock();
+  }
+
+  return false;
+}
+
+/**
+ * Safely extract the numeric repeat count from a repeat block.
+ */
+function getRepeatCount(block: Blockly.Block): number {
+  if (block.type === 'controls_repeat') {
+    const val = Number(block.getFieldValue('TIMES'));
+    return isNaN(val) ? 0 : Math.max(0, Math.floor(val));
+  }
+
+  // controls_repeat_ext
+  const timesBlock = block.getInputTargetBlock('TIMES');
+  if (timesBlock) {
+    const val = Number(timesBlock.getFieldValue('NUM'));
+    if (!isNaN(val)) {
+      return Math.max(0, Math.floor(val));
     }
   }
 
-  return commands;
+  const fieldVal = Number(block.getFieldValue('TIMES'));
+  if (!isNaN(fieldVal)) {
+    return Math.max(0, Math.floor(fieldVal));
+  }
+
+  return 0;
 }
 
 /** Result of executing a single command. */

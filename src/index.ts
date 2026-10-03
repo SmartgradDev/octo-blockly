@@ -140,7 +140,17 @@ const runProgram = async () => {
     renderGrid(simulatorPane, grid, robot, currentMission.target);
   }
 
-  const commands = extractCommands(ws as Blockly.Workspace);
+  const {commands, limitExceeded} = extractCommands(ws as Blockly.Workspace);
+
+  if (limitExceeded) {
+    setStatus(
+      '⚠️ Program limit exceeded! Maximum 500 robot commands per run.',
+      'error',
+    );
+    isRunning = false;
+    if (runBtn) runBtn.disabled = false;
+    return;
+  }
 
   if (commands.length === 0) {
     setStatus('No robot commands found. Drag some blocks!');
