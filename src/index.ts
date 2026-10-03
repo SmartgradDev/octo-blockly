@@ -23,6 +23,27 @@ Blockly.common.defineBlocks(blocks);
 Blockly.common.defineBlocks(robotBlocks);
 Object.assign(javascriptGenerator.forBlock, forBlock);
 
+// ── Session Best Score Tracking (In-Memory Browser Session) ─────────
+const sessionBestScores: Record<string, number> = {};
+
+const getBestScore = (missionId: string): number | null => {
+  return sessionBestScores[missionId] !== undefined
+    ? sessionBestScores[missionId]
+    : null;
+};
+
+const updateBestScore = (
+  missionId: string,
+  score: number,
+): {best: number; isNewBest: boolean} => {
+  const currentBest = sessionBestScores[missionId];
+  if (currentBest === undefined || score > currentBest) {
+    sessionBestScores[missionId] = score;
+    return {best: score, isNewBest: true};
+  }
+  return {best: currentBest, isNewBest: false};
+};
+
 // ── Active Mission State & Configuration ────────────────────────────
 let currentPhaseMissions: Mission[] = getMissionsByPhase(1);
 let currentMission: Mission = currentPhaseMissions[0];
@@ -108,7 +129,9 @@ const loadMission = (mission: Mission) => {
   const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
   if (runBtn) runBtn.disabled = false;
 
-  setStatus(`Loaded ${mission.title}. Program the robot!`);
+  const best = getBestScore(mission.id);
+  const bestStr = best !== null ? ` (Session Best: ${best})` : '';
+  setStatus(`Loaded ${mission.title}${bestStr}. Program the robot!`);
 };
 
 // Helper to populate Mission Selector Dropdown for active phase
@@ -238,19 +261,32 @@ const runProgram = async () => {
     if (isTargetReached()) {
       targetReached = true;
       const elapsedTimeMs = performance.now() - startTime;
+      const blockCount = ws.getAllBlocks(false).length;
+
       const scoreResult = calculateScore({
         completed: true,
-        commandCount: executedCount,
+        executedActionCount: executedCount,
+        blockCount: blockCount,
         timeMs: elapsedTimeMs,
-        optimalCommandCount: currentMission.optimalCommandCount,
+        optimalActionCount: currentMission.optimalCommandCount,
       });
+
+      const {best: bestScore, isNewBest} = updateBestScore(
+        currentMission.id,
+        scoreResult.score,
+      );
+
+      const bestLine = isNewBest
+        ? `Best Score: ${bestScore} 🏆 (New Best!)`
+        : `Best Score: ${bestScore}`;
 
       setStatus(
         `🎉 Mission Complete!\n` +
           `Rating: ${scoreResult.starDisplay} (${scoreResult.stars} ${scoreResult.stars === 1 ? 'star' : 'stars'})\n` +
           `Score: ${scoreResult.score}\n` +
-          `Commands: ${scoreResult.commandCount}\n` +
-          `Time: ${scoreResult.timeSeconds}s`,
+          `Actions: ${scoreResult.executedActionCount} | Blocks: ${scoreResult.blockCount}\n` +
+          `Time: ${scoreResult.timeSeconds}s\n` +
+          `${bestLine}`,
         'success',
       );
       break;
@@ -296,7 +332,10 @@ const resetRobot = () => {
       currentMission.obstacles,
     );
   }
-  setStatus('Mission reset. Program the robot to reach the star!');
+
+  const best = getBestScore(currentMission.id);
+  const bestStr = best !== null ? ` (Session Best: ${best})` : '';
+  setStatus(`Mission reset${bestStr}. Program the robot to reach the star!`);
 };
 
 // ── Wire up buttons ─────────────────────────────────────────────────

@@ -42,6 +42,7 @@ const config = {
     // created above added in a script tag.
     new HtmlWebpackPlugin({
       template: 'src/index.html',
+      favicon: 'src/assets/octopus-icon.png',
     }),
   ],
 };

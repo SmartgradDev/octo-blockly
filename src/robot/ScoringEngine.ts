@@ -2,13 +2,15 @@
  * ScoringEngine — pure calculation module for local mission scores.
  *
  * Deterministic and standalone — easy to test without DOM or state dependencies.
+ * Tracks executed robot actions, workspace block count, and execution time.
  */
 
 export interface ScoreParams {
   completed: boolean;
-  commandCount: number;
+  executedActionCount: number;
+  blockCount: number;
   timeMs: number;
-  optimalCommandCount?: number;
+  optimalActionCount?: number;
 }
 
 export interface ScoreResult {
@@ -16,26 +18,28 @@ export interface ScoreResult {
   score: number;
   stars: number; // 0 to 3
   starDisplay: string; // "⭐⭐⭐", "⭐⭐", "⭐", or ""
-  commandCount: number;
-  timeSeconds: number; // formatted to 1 decimal place, e.g. 12.4
+  executedActionCount: number;
+  blockCount: number;
+  timeSeconds: number; // formatted to 2 decimal places, e.g. 9.42
 }
 
 const BASE_SCORE = 1000;
-const EXTRA_COMMAND_PENALTY = 20; // -20 points per command above optimal
+const EXTRA_ACTION_PENALTY = 20; // -20 points per executed action above optimal
 const TIME_PENALTY_PER_SEC = 5; // -5 points per second elapsed
 
 /**
- * Calculate the mission score based on completion status, command count, and execution time.
+ * Calculate the mission score based on completion status, executed actions, workspace block count, and execution time.
  */
 export function calculateScore(params: ScoreParams): ScoreResult {
   const {
     completed,
-    commandCount,
+    executedActionCount,
+    blockCount,
     timeMs,
-    optimalCommandCount = 9,
+    optimalActionCount = 9,
   } = params;
 
-  const timeSeconds = Math.round((timeMs / 1000) * 10) / 10;
+  const timeSeconds = Math.round((timeMs / 1000) * 100) / 100;
 
   if (!completed) {
     return {
@@ -43,16 +47,17 @@ export function calculateScore(params: ScoreParams): ScoreResult {
       score: 0,
       stars: 0,
       starDisplay: '',
-      commandCount,
+      executedActionCount,
+      blockCount,
       timeSeconds,
     };
   }
 
-  const extraCommands = Math.max(0, commandCount - optimalCommandCount);
-  const commandPenalty = extraCommands * EXTRA_COMMAND_PENALTY;
+  const extraActions = Math.max(0, executedActionCount - optimalActionCount);
+  const actionPenalty = extraActions * EXTRA_ACTION_PENALTY;
   const timePenalty = Math.floor(timeSeconds * TIME_PENALTY_PER_SEC);
 
-  const score = Math.max(0, BASE_SCORE - commandPenalty - timePenalty);
+  const score = Math.max(0, BASE_SCORE - actionPenalty - timePenalty);
 
   let stars = 1;
   if (score >= 850) {
@@ -68,7 +73,8 @@ export function calculateScore(params: ScoreParams): ScoreResult {
     score,
     stars,
     starDisplay,
-    commandCount,
+    executedActionCount,
+    blockCount,
     timeSeconds,
   };
 }
