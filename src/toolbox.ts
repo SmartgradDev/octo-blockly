@@ -17,7 +17,7 @@ export const toolbox = {
   contents: [
     {
       kind: 'category',
-      name: 'Robotics',
+      name: '🤖 Robotics',
       colour: '210',
       contents: [
         {
@@ -63,7 +63,7 @@ export const toolbox = {
     },
     {
       kind: 'category',
-      name: 'Logic',
+      name: '🔷 Logic',
       categorystyle: 'logic_category',
       contents: [
         {
@@ -98,7 +98,7 @@ export const toolbox = {
     },
     {
       kind: 'category',
-      name: 'Loops',
+      name: '🔁 Loops',
       categorystyle: 'loop_category',
       contents: [
         {
@@ -161,7 +161,7 @@ export const toolbox = {
     },
     {
       kind: 'category',
-      name: 'Math',
+      name: '🔢 Math',
       categorystyle: 'math_category',
       contents: [
         {
@@ -367,7 +367,7 @@ export const toolbox = {
     },
     {
       kind: 'category',
-      name: 'Text',
+      name: '🔤 Text',
       categorystyle: 'text_category',
       contents: [
         {
@@ -555,7 +555,7 @@ export const toolbox = {
     },
     {
       kind: 'category',
-      name: 'Lists',
+      name: '📋 Lists',
       categorystyle: 'list_category',
       contents: [
         {
@@ -661,13 +661,13 @@ export const toolbox = {
     },
     {
       kind: 'category',
-      name: 'Variables',
+      name: '📦 Variables',
       categorystyle: 'variable_category',
       custom: 'VARIABLE',
     },
     {
       kind: 'category',
-      name: 'Functions',
+      name: '⚙ Functions',
       categorystyle: 'procedure_category',
       custom: 'PROCEDURE',
     },

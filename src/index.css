@@ -1,281 +1,1008 @@
+/* ==========================================================================
+   OctoBlockly — Educational Robotics Studio Theme & Design System
+   ========================================================================== */
+
+:root {
+  /* Colors */
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #eff6ff;
+  --primary-border: #bfdbfe;
+
+  --success: #059669;
+  --success-hover: #047857;
+  --success-light: #ecfdf5;
+  --success-border: #a7f3d0;
+
+  --warning: #d97706;
+  --warning-light: #fffbeb;
+  --warning-border: #fde68a;
+
+  --danger: #dc2626;
+  --danger-light: #fef2f2;
+  --danger-border: #fecaca;
+
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+
+  --bg-app: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-surface: #f1f5f9;
+  --border-card: #e2e8f0;
+  --border-subtle: #cbd5e1;
+
+  /* Fonts */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Reset & Base Layout ─────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  max-width: 100vw;
-}
-
-pre,
-code {
-  overflow: auto;
-}
-
-#pageContainer {
-  display: flex;
-  width: 100%;
-  max-width: 100vw;
+  padding: 0;
+  width: 100vw;
   height: 100vh;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  color: var(--text-main);
+  background-color: var(--bg-app);
+  -webkit-font-smoothing: antialiased;
 }
 
-#blocklyDiv {
-  flex-basis: 100%;
-  height: 100%;
-  min-width: 600px;
+/* ── 1. Top Application Bar ───────────────────────────────────────── */
+#topAppBar {
+  height: 56px;
+  width: 100%;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.25rem;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.03);
+  z-index: 100;
+  user-select: none;
 }
 
-#outputPane {
+.app-branding {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-logo-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(2, 132, 199, 0.15);
+}
+
+.app-logo-img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.app-title-group {
   display: flex;
   flex-direction: column;
-  width: 400px;
-  flex: 0 0 400px;
-  overflow: auto;
-  margin: 1rem;
 }
 
-#generatedCode {
-  height: 50%;
-  background-color: rgb(247, 240, 228);
+.app-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-main);
+  line-height: 1.1;
 }
 
-#output {
-  height: 50%;
+.app-subtitle {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--primary);
 }
 
-/* ── Robot Grid Simulator ─────────────────────────── */
+.top-mission-context {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.context-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-card);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+}
+
+.context-phase {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.context-divider {
+  color: var(--text-subtle);
+}
+
+.context-mission {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.step-indicator {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.top-action-btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border-card);
+}
+
+.btn-ghost:hover {
+  background: var(--bg-surface);
+  color: var(--text-main);
+}
+
+.btn-secondary {
+  background: #ffffff;
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-surface);
+  border-color: #94a3b8;
+}
+
+.btn-primary {
+  background: var(--success);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.25);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--success-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(5, 150, 105, 0.3);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-primary.is-running {
+  background: #2563eb;
+  animation: pulse-primary 1.5s infinite;
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+  animation: bounce-subtle 2s infinite;
+}
+
+.btn-success:hover {
+  filter: brightness(1.08);
+}
+
+@keyframes pulse-primary {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* ── 2. Split Workspace Layout ────────────────────────────────────── */
+#pageContainer {
+  display: flex;
+  width: 100vw;
+  height: calc(100vh - 56px);
+  overflow: hidden;
+}
+
+/* ── 3. Mission & Simulator Sidebar ───────────────────────────────── */
+#outputPane {
+  width: 420px;
+  flex: 0 0 420px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--bg-app);
+  border-right: 1px solid var(--border-card);
+}
+
+#outputPane::-webkit-scrollbar {
+  width: 6px;
+}
+#outputPane::-webkit-scrollbar-track {
+  background: transparent;
+}
+#outputPane::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+#outputPane::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Cards */
+.sidebar-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Navigation Dropdowns */
+.mission-nav-card {
+  gap: 10px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.select-container {
+  position: relative;
+}
+
+.select-container select {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--text-main);
+  background-color: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.select-container select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Mission Details Card */
+.mission-info-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mission-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.meta-phase-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid var(--primary-border);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+#missionBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.concept-tag {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  background-color: var(--bg-surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border-card);
+}
+
+#missionTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.3;
+}
+
+.mission-goal-box {
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 8px 8px 0;
+  padding: 8px 12px;
+}
+
+.goal-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: 3px;
+}
+
+#missionDescription {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text-main);
+}
+
+/* Simulator Card */
+.simulator-card {
+  padding: 12px;
+  background: var(--bg-card);
+}
+
+.simulator-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.card-heading {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
 
 #simulatorPane {
-  padding: 0.5rem;
-  border-bottom: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
 
+.simulator-board-wrapper {
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  overflow: auto;
+}
+
+/* ── 4. Robot Grid Cells & Icons ──────────────────────────────────── */
 .robot-grid {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 5px;
   margin: 0 auto;
 }
 
 .robot-grid-cell {
-  width: 52px;
-  height: 52px;
-  border: 1px solid #ccc;
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  min-height: 48px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   text-align: center;
   vertical-align: middle;
   font-size: 16px;
-  background-color: #f9f9f9;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  position: relative;
+  transition: all 0.15s ease;
+  user-select: none;
 }
 
+.robot-grid-cell:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Robot Avatar Cell */
 .robot-cell {
-  background-color: #e3f2fd;
+  background-color: #eff6ff !important;
+  border-color: #93c5fd !important;
 }
 
 .robot-icon-wrapper {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  vertical-align: middle;
+  position: relative;
+  width: 100%;
+  height: 100%;
 }
 
 .octopus-icon-img {
   width: 32px;
   height: 32px;
   object-fit: contain;
-  display: inline-block;
-  vertical-align: middle;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.15));
+  transition: transform 0.2s ease;
 }
 
-.robot-direction-arrow {
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.robot-status {
-  text-align: center;
-  margin-top: 0.5rem;
-  font-family: monospace;
-  font-size: 0.85rem;
-  color: #555;
-}
-
-/* ── Controls & Status ────────────────────────────── */
-
-#controlsPane {
+.robot-direction-badge {
+  position: absolute;
+  bottom: 0px;
+  right: 0px;
+  width: 14px;
+  height: 14px;
+  background-color: var(--primary);
+  color: #ffffff;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 800;
   display: flex;
-  gap: 0.5rem;
-  padding: 0.5rem;
+  align-items: center;
   justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-#controlsPane button {
-  padding: 0.4rem 1.2rem;
-  font-size: 0.95rem;
-  cursor: pointer;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-}
-
-#runBtn {
-  background-color: #4CAF50;
-  color: #fff;
-  border-color: #4CAF50;
-  font-weight: bold;
-}
-
-#runBtn:hover {
-  background-color: #43a047;
-}
-
-#resetBtn:hover {
-  background-color: #f5f5f5;
-}
-
-#statusMessage {
-  padding: 0.5rem;
-  font-size: 0.9rem;
-  text-align: center;
-  color: #555;
-  min-height: 1.2em;
-  white-space: pre-line;
-  line-height: 1.4;
-}
-
-#statusMessage.error {
-  color: #c62828;
-  background-color: #ffebee;
-  border: 1px solid #ef9a9a;
-  border-radius: 4px;
-  margin: 0.25rem 0.5rem;
-}
-
-#statusMessage.success {
-  color: #1b5e20;
-  background-color: #e8f5e9;
-  border: 1px solid #a5d6a7;
-  border-radius: 4px;
-  margin: 0.25rem 0.5rem;
-  font-weight: 500;
-}
-
-/* ── Mission & Target Styles ───────────────────────── */
-
-#missionTitle {
-  margin: 0;
-  padding: 0.5rem 0 0.25rem 0;
-  font-size: 1.1rem;
-  text-align: center;
-  color: #333;
-}
-
+/* Target Goal Cell */
 .target-cell {
-  background-color: #fffde7;
-  border-color: #ffd54f;
-  font-size: 18px;
+  background: #fffbeb !important;
+  border-color: #fcd34d !important;
+}
+
+.cell-item-star {
+  font-size: 22px;
+  display: inline-block;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(245, 158, 11, 0.4));
+}
+
+.star-pulse {
+  animation: pulse-star 1.8s infinite ease-in-out;
+}
+
+@keyframes pulse-star {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 2px 4px rgba(245, 158, 11, 0.4)); }
+  50% { transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.7)); }
 }
 
 .robot-on-target {
-  background-color: #c8e6c9;
+  background: #ecfdf5 !important;
+  border-color: #6ee7b7 !important;
 }
 
-/* ── Mission Selector & Description ───────────────── */
-
-#missionSelectorPane {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  padding: 0.5rem;
-  background-color: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
-  flex-wrap: wrap;
-}
-
-#phaseSelect,
-#missionSelect {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.95rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  background-color: #fff;
-  cursor: pointer;
-}
-
-#missionDescription {
-  margin: 0.25rem 0.5rem 0.5rem;
-  font-size: 0.85rem;
-  color: #666;
-  text-align: center;
-  font-style: italic;
-}
-
+/* Obstacle Rock Cell */
 .obstacle-cell {
-  background-color: #e0e0e0;
-  border-color: #9e9e9e;
-  font-size: 18px;
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
 }
 
+.cell-item-rock {
+  font-size: 20px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* Gem Item Cell */
+.cell-item-gem {
+  font-size: 20px;
+  filter: drop-shadow(0 2px 4px rgba(6, 182, 212, 0.4));
+  animation: bounce-gem 2.5s infinite;
+}
+
+@keyframes bounce-gem {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* Colored Tiles */
 .color-cell-red {
-  background-color: #ffcdd2 !important;
-  border-color: #e57373 !important;
+  background-color: #fef2f2 !important;
+  border-color: #f87171 !important;
 }
 
 .color-cell-blue {
-  background-color: #bbdefb !important;
-  border-color: #64b5f6 !important;
+  background-color: #f0f9ff !important;
+  border-color: #38bdf8 !important;
 }
 
 .color-cell-green {
-  background-color: #c8e6c9 !important;
-  border-color: #81c784 !important;
+  background-color: #f0fdf4 !important;
+  border-color: #4ade80 !important;
 }
 
 .color-cell-yellow {
-  background-color: #fff9c4 !important;
-  border-color: #fff176 !important;
+  background-color: #fefce8 !important;
+  border-color: #facc15 !important;
 }
 
 .line-cell {
-  border: 2px dashed #9c27b0 !important;
+  border: 2px dashed #c084fc !important;
+  background-color: #faf5ff !important;
 }
 
-/* ── Mission Badges & Difficulty Styling ───────────── */
-#missionBadges {
+.cell-item-line {
+  font-size: 16px;
+  opacity: 0.7;
+}
+
+/* ── 5. Telemetry HUD ─────────────────────────────────────────────── */
+.robot-hud {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+}
+
+.hud-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-card);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.hud-icon {
+  font-size: 0.85rem;
+}
+
+.hud-chip-battery {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.battery-gauge {
+  width: 44px;
+  height: 7px;
+  background-color: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.battery-gauge-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.battery-high .battery-gauge-fill { background-color: #10b981; }
+.battery-mid .battery-gauge-fill { background-color: #f59e0b; }
+.battery-low .battery-gauge-fill { background-color: #ef4444; }
+
+.hud-progress-banner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+/* ── 6. Controls Card ─────────────────────────────────────────────── */
+.controls-card {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 10px;
+}
+
+.sidebar-action-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.btn-run {
+  background: var(--success);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);
+}
+
+.btn-run:hover:not(:disabled) {
+  background: var(--success-hover);
+  box-shadow: 0 4px 6px rgba(5, 150, 105, 0.25);
+}
+
+.btn-run:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-reset {
+  background: #ffffff;
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+  flex: 0 0 auto;
+}
+
+.btn-reset:hover {
+  background: var(--bg-surface);
+}
+
+.btn-next {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+}
+
+/* ── 7. Feedback & Status Card ────────────────────────────────────── */
+.status-card {
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  background-color: #ffffff;
+  border: 1px solid var(--border-card);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  white-space: pre-line;
+}
+
+.status-card.error {
+  color: #991b1b;
+  background-color: var(--danger-light);
+  border-color: var(--danger-border);
+}
+
+.status-card.success {
+  color: #065f46;
+  background: linear-gradient(to bottom, #ecfdf5 0%, #d1fae5 100%);
+  border-color: var(--success-border);
+  box-shadow: 0 4px 10px rgba(5, 150, 105, 0.1);
+}
+
+/* Success Card Formatting */
+.status-card .achievement-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #065f46;
+  margin-bottom: 4px;
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 4px 0 8px 0;
-  flex-wrap: wrap;
 }
 
-.badge {
+.status-card .stars-row {
+  font-size: 1.25rem;
+  margin: 6px 0;
+  letter-spacing: 2px;
+}
+
+.status-card .stats-badge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.status-card .stat-pill {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #047857;
+}
+
+.status-card .best-score-badge {
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 6px;
   display: inline-block;
-  padding: 3px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: bold;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  color: #ffffff;
+  font-size: 0.8rem;
 }
 
-.badge-beginner {
-  background-color: #2e7d32;
+/* ── 8. Collapsible Code Inspector ────────────────────────────────── */
+.code-inspector-card {
+  padding: 0;
+  overflow: hidden;
 }
 
-.badge-intermediate {
-  background-color: #1976d2;
+.code-inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #ffffff;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
 }
 
-.badge-advanced {
-  background-color: #ed6c02;
+.code-inspector-header:hover {
+  background: var(--bg-surface);
 }
 
-.badge-expert {
-  background-color: #d32f2f;
+.code-inspector-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.concept-tag {
-  display: inline-block;
+.code-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #e0f2fe;
+  color: #0369a1;
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 11px;
-  background-color: #eceff1;
-  color: #37474f;
-  font-family: sans-serif;
+}
+
+.code-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.toggle-arrow {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.code-inspector-card.is-collapsed .toggle-arrow {
+  transform: rotate(-90deg);
+}
+
+.code-inspector-body {
+  padding: 10px 14px;
+  background: #0f172a;
+  border-top: 1px solid #1e293b;
+  max-height: 220px;
+  overflow-y: auto;
+  transition: max-height 0.25s ease;
+}
+
+.code-inspector-card.is-collapsed .code-inspector-body {
+  display: none;
+}
+
+#generatedCode {
+  margin: 0;
+  background: transparent;
+  color: #38bdf8;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+#output {
+  display: none;
+}
+
+/* ── 9. Blockly Workspace Container ───────────────────────────────── */
+#workspaceContainer {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+#blocklyDiv {
+  width: 100%;
+  height: 100%;
+}
+
+/* Floating Workspace Toolbar */
+.workspace-floating-toolbar {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: #ffffff;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: var(--shadow-md);
+  z-index: 70;
+}
+
+.ws-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ws-btn:hover {
+  background: var(--bg-surface);
+  color: var(--text-main);
+}
+
+.ws-btn-divider {
+  width: 1px;
+  height: 18px;
+  background-color: var(--border-card);
+  margin: 0 2px;
+}
+
+/* ── 10. Blockly Toolbox Custom Presentation ──────────────────────── */
+.blocklyToolboxDiv {
+  background-color: #f8fafc !important;
+  border-right: 1px solid #e2e8f0 !important;
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.02) !important;
+  padding: 8px 4px !important;
+}
+
+.blocklyTreeRow {
+  padding: 7px 12px !important;
+  margin: 2px 4px !important;
+  border-radius: 8px !important;
+  font-family: var(--font-sans) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+  transition: all 0.12s ease !important;
+}
+
+.blocklyTreeRow:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.blocklyTreeSelected {
+  background-color: #e0f2fe !important;
+  color: #0369a1 !important;
+}
+
+.blocklyTreeSeparator {
+  border-bottom: 1px solid #e2e8f0 !important;
+  margin: 6px 10px !important;
+}
+
+.blocklyFlyout {
+  border-right: 1px solid #cbd5e1 !important;
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.05) !important;
+}
+
+.blocklyFlyoutBackground {
+  fill: #ffffff !important;
+  fill-opacity: 0.98 !important;
+}
+
+/* ── 11. Responsive Design ────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  #outputPane {
+    width: 360px;
+    flex: 0 0 360px;
+    padding: 12px;
+  }
+
+  .robot-grid-cell {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    min-height: 42px;
+  }
+
+  .octopus-icon-img {
+    width: 28px;
+    height: 28px;
+  }
+
+  .top-mission-context {
+    display: none;
+  }
 }

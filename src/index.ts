@@ -16,7 +16,14 @@ import {renderGrid} from './robot/GridRenderer';
 import {executeCommand, ProgramInterpreter} from './robot/CommandExecutor';
 import {getMissionsByPhase, Mission} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
+import octopusIcon from './assets/octopus-icon.png';
 import './index.css';
+
+// Set application header logo image
+const appLogoImg = document.getElementById('appLogoImg') as HTMLImageElement | null;
+if (appLogoImg) {
+  appLogoImg.src = octopusIcon;
+}
 
 // Register the blocks and generator with Blockly
 Blockly.common.defineBlocks(blocks);
@@ -72,7 +79,31 @@ const statusMessage = document.getElementById('statusMessage');
 if (!blocklyDiv) {
   throw new Error(`div with id 'blocklyDiv' not found`);
 }
-const ws = Blockly.inject(blocklyDiv, {toolbox});
+
+const ws = Blockly.inject(blocklyDiv, {
+  toolbox,
+  grid: {
+    spacing: 24,
+    length: 3,
+    colour: '#cbd5e1',
+    snap: true,
+  },
+  zoom: {
+    controls: false, // Using our custom floating toolbar controls
+    wheel: true,
+    startScale: 0.95,
+    maxScale: 2.5,
+    minScale: 0.4,
+    scaleSpeed: 1.15,
+    pinch: true,
+  },
+  trashcan: true,
+  move: {
+    scrollbars: true,
+    drag: true,
+    wheel: true,
+  },
+});
 
 // ── Helper: update the generated code preview ───────────────────────
 const updateCodePreview = () => {
@@ -87,8 +118,21 @@ const updateCodePreview = () => {
 // ── Helper: set a status message ────────────────────────────────────
 function setStatus(text: string, type: '' | 'error' | 'success' = '') {
   if (!statusMessage) return;
-  statusMessage.textContent = text;
-  statusMessage.className = type;
+  statusMessage.className = `status-card ${type}`;
+
+  if (type === 'success') {
+    statusMessage.innerHTML = `
+      <div class="achievement-title"><span>🎉</span> <span>Mission Complete!</span></div>
+      <div>${text.replace(/🎉 Mission Complete!\n?/, '').replace(/\n/g, '<br>')}</div>
+    `;
+  } else if (type === 'error') {
+    statusMessage.innerHTML = `
+      <div style="font-weight: 700; margin-bottom: 2px;">⚠️ Execution Stopped</div>
+      <div>${text.replace(/\n/g, '<br>')}</div>
+    `;
+  } else {
+    statusMessage.innerHTML = text.replace(/\n/g, '<br>');
+  }
 }
 
 // ── Execution state & helpers ───────────────────────────────────────
@@ -134,6 +178,33 @@ const loadMission = (mission: Mission) => {
   if (missionTitleEl) missionTitleEl.textContent = mission.title;
   if (missionDescEl) missionDescEl.textContent = mission.description;
 
+  const topPhaseLabel = document.getElementById('topPhaseLabel');
+  const topMissionLabel = document.getElementById('topMissionLabel');
+  const missionPhaseTag = document.getElementById('missionPhaseTag');
+  const missionStepCounter = document.getElementById('missionStepCounter');
+
+  const phaseNames: Record<number, string> = {
+    1: 'Commands',
+    2: 'Logic',
+    3: 'Programming abstraction',
+  };
+  const phaseName = phaseNames[mission.phase] || `Phase ${mission.phase}`;
+
+  if (topPhaseLabel) topPhaseLabel.textContent = `Phase ${mission.phase}: ${phaseName}`;
+  if (topMissionLabel) topMissionLabel.textContent = mission.title;
+  if (missionPhaseTag) missionPhaseTag.textContent = `Phase ${mission.phase}`;
+
+  const currentIdx = activeMissionsList.findIndex((m) => m.id === mission.id);
+  if (missionStepCounter && currentIdx >= 0) {
+    missionStepCounter.textContent = `Mission ${currentIdx + 1} of ${activeMissionsList.length}`;
+  }
+
+  // Reset next mission action buttons
+  const nextMissionBtn = document.getElementById('nextMissionBtn');
+  const sidebarNextBtn = document.getElementById('sidebarNextBtn');
+  if (nextMissionBtn) nextMissionBtn.style.display = 'none';
+  if (sidebarNextBtn) sidebarNextBtn.style.display = 'none';
+
   const conceptsContainerEl = document.getElementById('conceptsContainer');
   if (conceptsContainerEl) {
     conceptsContainerEl.innerHTML = '';
@@ -171,7 +242,20 @@ const loadMission = (mission: Mission) => {
   }
 
   const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
-  if (runBtn) runBtn.disabled = false;
+  const sidebarRunBtn = document.getElementById('sidebarRunBtn') as HTMLButtonElement | null;
+  const runBtnText = document.getElementById('runBtnText');
+  const sidebarRunText = document.querySelector('.sidebar-run-text');
+
+  if (runBtn) {
+    runBtn.disabled = false;
+    runBtn.classList.remove('is-running');
+  }
+  if (sidebarRunBtn) {
+    sidebarRunBtn.disabled = false;
+    sidebarRunBtn.classList.remove('is-running');
+  }
+  if (runBtnText) runBtnText.textContent = 'Run Program';
+  if (sidebarRunText) sidebarRunText.textContent = 'Run Program';
 
   const best = getBestScore(mission.id);
   const bestStr = best !== null ? ` (Session Best: ${best})` : '';
@@ -227,7 +311,20 @@ const runProgram = async () => {
   stopRequested = false;
 
   const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
-  if (runBtn) runBtn.disabled = true;
+  const sidebarRunBtn = document.getElementById('sidebarRunBtn') as HTMLButtonElement | null;
+  const runBtnText = document.getElementById('runBtnText');
+  const sidebarRunText = document.querySelector('.sidebar-run-text');
+
+  if (runBtn) {
+    runBtn.disabled = true;
+    runBtn.classList.add('is-running');
+  }
+  if (sidebarRunBtn) {
+    sidebarRunBtn.disabled = true;
+    sidebarRunBtn.classList.add('is-running');
+  }
+  if (runBtnText) runBtnText.textContent = 'Running...';
+  if (sidebarRunText) sidebarRunText.textContent = 'Running...';
 
   // Reset robot to initial mission state before starting run.
   robot.x = currentMission.start.x;
@@ -393,20 +490,29 @@ const runProgram = async () => {
         scoreResult.score,
       );
 
-      const bestLine = isNewBest
-        ? `Best Score: ${bestScore} 🏆 (New Best!)`
-        : `Best Score: ${bestScore}`;
+      const bestBadge = isNewBest
+        ? `<div class="best-score-badge">🏆 New Best Score: ${bestScore}!</div>`
+        : `<div class="best-score-badge">Best Score: ${bestScore}</div>`;
 
       setStatus(
         `🎉 Mission Complete!\n` +
           `${currentEval.message}\n` +
-          `Rating: ${scoreResult.starDisplay} (${scoreResult.stars} ${scoreResult.stars === 1 ? 'star' : 'stars'})\n` +
-          `Score: ${scoreResult.score}\n` +
-          `Actions: ${scoreResult.executedActionCount} | Blocks: ${scoreResult.blockCount}\n` +
-          `Time: ${scoreResult.timeSeconds}s\n` +
-          `${bestLine}`,
+          `<div class="stars-row">${scoreResult.starDisplay} (${scoreResult.stars} ${scoreResult.stars === 1 ? 'star' : 'stars'})</div>` +
+          `<div class="stats-badge-grid">` +
+          `<div class="stat-pill">Score: ${scoreResult.score}</div>` +
+          `<div class="stat-pill">Actions: ${scoreResult.executedActionCount}</div>` +
+          `<div class="stat-pill">Blocks: ${scoreResult.blockCount}</div>` +
+          `<div class="stat-pill">Time: ${scoreResult.timeSeconds}s</div>` +
+          `</div>` +
+          `${bestBadge}`,
         'success',
       );
+
+      // Reveal next mission buttons
+      const nextMissionBtn = document.getElementById('nextMissionBtn');
+      const sidebarNextBtn = document.getElementById('sidebarNextBtn');
+      if (nextMissionBtn) nextMissionBtn.style.display = 'inline-flex';
+      if (sidebarNextBtn) sidebarNextBtn.style.display = 'inline-flex';
       break;
     } else {
       setStatus(`Step ${executedCount} (${cmd}): ${result.message}`);
@@ -428,7 +534,16 @@ const runProgram = async () => {
   }
 
   isRunning = false;
-  if (runBtn) runBtn.disabled = false;
+  if (runBtn) {
+    runBtn.disabled = false;
+    runBtn.classList.remove('is-running');
+  }
+  if (sidebarRunBtn) {
+    sidebarRunBtn.disabled = false;
+    sidebarRunBtn.classList.remove('is-running');
+  }
+  if (runBtnText) runBtnText.textContent = 'Run Program';
+  if (sidebarRunText) sidebarRunText.textContent = 'Run Program';
 };
 
 // ── Reset: restore the robot to its initial position & stop running ─
@@ -436,8 +551,26 @@ const resetRobot = () => {
   stopRequested = true;
   isRunning = false;
 
+  const nextMissionBtn = document.getElementById('nextMissionBtn');
+  const sidebarNextBtn = document.getElementById('sidebarNextBtn');
+  if (nextMissionBtn) nextMissionBtn.style.display = 'none';
+  if (sidebarNextBtn) sidebarNextBtn.style.display = 'none';
+
   const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
-  if (runBtn) runBtn.disabled = false;
+  const sidebarRunBtn = document.getElementById('sidebarRunBtn') as HTMLButtonElement | null;
+  const runBtnText = document.getElementById('runBtnText');
+  const sidebarRunText = document.querySelector('.sidebar-run-text');
+
+  if (runBtn) {
+    runBtn.disabled = false;
+    runBtn.classList.remove('is-running');
+  }
+  if (sidebarRunBtn) {
+    sidebarRunBtn.disabled = false;
+    sidebarRunBtn.classList.remove('is-running');
+  }
+  if (runBtnText) runBtnText.textContent = 'Run Program';
+  if (sidebarRunText) sidebarRunText.textContent = 'Run Program';
 
   robot.x = currentMission.start.x;
   robot.y = currentMission.start.y;
@@ -481,9 +614,65 @@ const resetRobot = () => {
   setStatus(`Mission reset${bestStr}. Program the robot to reach the star!`);
 };
 
+// ── Next Mission Handler ────────────────────────────────────────────
+const handleNextMission = () => {
+  const currentIdx = activeMissionsList.findIndex((m) => m.id === currentMission.id);
+  if (currentIdx >= 0 && currentIdx < activeMissionsList.length - 1) {
+    const nextMission = activeMissionsList[currentIdx + 1];
+    if (missionSelect) {
+      missionSelect.value = (currentIdx + 1).toString();
+    }
+    loadMission(nextMission);
+  } else {
+    // End of current phase: automatically proceed to next phase if available
+    const nextPhaseId = currentMission.phase + 1;
+    if (nextPhaseId <= 3 && phaseSelect) {
+      phaseSelect.value = nextPhaseId.toString();
+      updateMissionsList();
+    }
+  }
+};
+
+// ── Collapsible Code Inspector Toggle ───────────────────────────────
+const toggleCodeInspector = () => {
+  const codeInspectorCard = document.getElementById('codeInspectorCard');
+  if (codeInspectorCard) {
+    codeInspectorCard.classList.toggle('is-collapsed');
+    updateCodePreview();
+  }
+};
+
 // ── Wire up buttons ─────────────────────────────────────────────────
 document.getElementById('runBtn')?.addEventListener('click', runProgram);
+document.getElementById('sidebarRunBtn')?.addEventListener('click', runProgram);
 document.getElementById('resetBtn')?.addEventListener('click', resetRobot);
+document.getElementById('sidebarResetBtn')?.addEventListener('click', resetRobot);
+document.getElementById('nextMissionBtn')?.addEventListener('click', handleNextMission);
+document.getElementById('sidebarNextBtn')?.addEventListener('click', handleNextMission);
+document.getElementById('topCodeBtn')?.addEventListener('click', toggleCodeInspector);
+document.getElementById('codeInspectorToggle')?.addEventListener('click', toggleCodeInspector);
+
+// Floating Workspace Toolbar Wiring
+document.getElementById('wsZoomIn')?.addEventListener('click', () => {
+  (ws as any).zoomCenter ? (ws as any).zoomCenter(1) : (ws as any).zoom?.(0, 0, 1);
+});
+document.getElementById('wsZoomOut')?.addEventListener('click', () => {
+  (ws as any).zoomCenter ? (ws as any).zoomCenter(-1) : (ws as any).zoom?.(0, 0, -1);
+});
+document.getElementById('wsZoomReset')?.addEventListener('click', () => {
+  (ws as any).zoomReset ? (ws as any).zoomReset() : (ws as any).scrollCenter?.();
+});
+document.getElementById('wsUndo')?.addEventListener('click', () => {
+  (ws as any).undo?.(false);
+});
+document.getElementById('wsRedo')?.addEventListener('click', () => {
+  (ws as any).undo?.(true);
+});
+
+// Resize listener to keep Blockly canvas perfectly aligned
+window.addEventListener('resize', () => {
+  Blockly.svgResize(ws as Blockly.WorkspaceSvg);
+});
 
 if (ws) {
   // Load the initial state from storage.

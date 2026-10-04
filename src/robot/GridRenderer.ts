@@ -27,23 +27,23 @@ function directionArrow(dir: Direction): string {
 }
 
 /**
- * Creates a DOM wrapper containing the octopus icon image and direction arrow.
+ * Creates a DOM wrapper containing the octopus icon image and direction indicator.
  */
 function renderRobotElement(dir: Direction): HTMLElement {
-  const wrapper = document.createElement('span');
-  wrapper.className = 'robot-icon-wrapper';
+  const wrapper = document.createElement('div');
+  wrapper.className = `robot-icon-wrapper robot-dir-${dir.toLowerCase()}`;
 
   const img = document.createElement('img');
   img.src = octopusIcon;
-  img.alt = 'Octopus Robot';
+  img.alt = 'Octo Robot';
   img.className = 'octopus-icon-img';
 
-  const arrow = document.createElement('span');
-  arrow.className = 'robot-direction-arrow';
-  arrow.textContent = directionArrow(dir);
+  const badge = document.createElement('span');
+  badge.className = 'robot-direction-badge';
+  badge.textContent = directionArrow(dir);
 
   wrapper.appendChild(img);
-  wrapper.appendChild(arrow);
+  wrapper.appendChild(badge);
 
   return wrapper;
 }
@@ -63,6 +63,9 @@ export function renderGrid(
   collectedItems?: Position[],
   progressText?: string,
 ): void {
+  const boardWrapper = document.createElement('div');
+  boardWrapper.className = 'simulator-board-wrapper';
+
   const table = document.createElement('table');
   table.className = 'robot-grid';
 
@@ -74,6 +77,8 @@ export function renderGrid(
     for (let col = 0; col < grid.width; col++) {
       const td = document.createElement('td');
       td.className = 'robot-grid-cell';
+      td.setAttribute('data-col', col.toString());
+      td.setAttribute('data-row', row.toString());
 
       const isRobot = col === robot.x && row === robot.y;
       const isTarget = target && col === target.x && row === target.y;
@@ -100,10 +105,14 @@ export function renderGrid(
         if (isRobot) {
           td.appendChild(renderRobotElement(robot.direction));
           const rockSpan = document.createElement('span');
+          rockSpan.className = 'cell-item-rock';
           rockSpan.textContent = '🪨';
           td.appendChild(rockSpan);
         } else {
-          td.textContent = '🪨';
+          const rockSpan = document.createElement('span');
+          rockSpan.className = 'cell-item-rock';
+          rockSpan.textContent = '🪨';
+          td.appendChild(rockSpan);
         }
       } else if (isTarget) {
         td.classList.add('target-cell');
@@ -111,41 +120,91 @@ export function renderGrid(
           td.classList.add('robot-cell', 'robot-on-target');
           td.appendChild(renderRobotElement(robot.direction));
           const starSpan = document.createElement('span');
+          starSpan.className = 'cell-item-star star-pulse';
           starSpan.textContent = '⭐';
           td.appendChild(starSpan);
         } else {
-          td.textContent = '⭐';
+          const starSpan = document.createElement('span');
+          starSpan.className = 'cell-item-star';
+          starSpan.textContent = '⭐';
+          td.appendChild(starSpan);
         }
       } else if (isRobot) {
         td.classList.add('robot-cell');
         td.appendChild(renderRobotElement(robot.direction));
         if (isUncollectedItem) {
           const itemSpan = document.createElement('span');
+          itemSpan.className = 'cell-item-gem';
           itemSpan.textContent = '💎';
           td.appendChild(itemSpan);
         }
       } else if (isUncollectedItem) {
-        td.textContent = '💎';
+        const itemSpan = document.createElement('span');
+        itemSpan.className = 'cell-item-gem';
+        itemSpan.textContent = '💎';
+        td.appendChild(itemSpan);
       } else if (isLine && !coloredCell) {
-        td.textContent = '🛤️';
+        const lineSpan = document.createElement('span');
+        lineSpan.className = 'cell-item-line';
+        lineSpan.textContent = '🛤️';
+        td.appendChild(lineSpan);
       }
 
       tr.appendChild(td);
     }
     table.appendChild(tr);
   }
+  boardWrapper.appendChild(table);
 
-  // Status line below the grid.
-  const status = document.createElement('div');
-  status.className = 'robot-status';
-  const batteryStr =
-    robot.battery !== undefined
-      ? `Battery: ${robot.battery.toFixed(1)} / ${robot.maxBattery?.toFixed(1) ?? robot.battery.toFixed(1)}`
-      : 'Battery: Unlimited';
-  const progressStr = progressText ? ` | ${progressText}` : '';
-  status.textContent = `Position: (${robot.x}, ${robot.y}) | Direction: ${robot.direction} | Speed: ${robot.motorSpeed}% | ${batteryStr}${progressStr}`;
+  // Modern Robot Telemetry HUD below the game board
+  const hud = document.createElement('div');
+  hud.className = 'robot-hud robot-status';
+
+  // Position Pill
+  const posPill = document.createElement('div');
+  posPill.className = 'hud-chip hud-chip-pos';
+  posPill.innerHTML = `<span class="hud-icon">📍</span><span class="hud-label">(${robot.x}, ${robot.y})</span>`;
+  hud.appendChild(posPill);
+
+  // Direction Pill
+  const dirPill = document.createElement('div');
+  dirPill.className = 'hud-chip hud-chip-dir';
+  dirPill.innerHTML = `<span class="hud-icon">${directionArrow(robot.direction)}</span><span class="hud-label">${robot.direction}</span>`;
+  hud.appendChild(dirPill);
+
+  // Speed Pill
+  const speedPill = document.createElement('div');
+  speedPill.className = 'hud-chip hud-chip-speed';
+  speedPill.innerHTML = `<span class="hud-icon">⚡</span><span class="hud-label">${robot.motorSpeed}%</span>`;
+  hud.appendChild(speedPill);
+
+  // Battery Pill (if battery active)
+  if (robot.battery !== undefined) {
+    const maxBat = robot.maxBattery || 100;
+    const currentBat = Math.max(0, robot.battery);
+    const batPct = Math.min(100, Math.round((currentBat / maxBat) * 100));
+    const batStatusColor =
+      batPct > 50 ? 'battery-high' : batPct > 20 ? 'battery-mid' : 'battery-low';
+
+    const batPill = document.createElement('div');
+    batPill.className = `hud-chip hud-chip-battery ${batStatusColor}`;
+    batPill.innerHTML = `
+      <span class="hud-icon">🔋</span>
+      <span class="hud-label">${currentBat.toFixed(1)} / ${maxBat.toFixed(1)}</span>
+      <div class="battery-gauge"><div class="battery-gauge-fill" style="width: ${batPct}%;"></div></div>
+    `;
+    hud.appendChild(batPill);
+  }
+
+  // Objective / Progress Text Banner
+  if (progressText) {
+    const progBanner = document.createElement('div');
+    progBanner.className = 'hud-progress-banner';
+    progBanner.innerHTML = `<span class="prog-icon">🎯</span><span class="prog-text">${progressText}</span>`;
+    hud.appendChild(progBanner);
+  }
 
   container.innerHTML = '';
-  container.appendChild(table);
-  container.appendChild(status);
+  container.appendChild(boardWrapper);
+  container.appendChild(hud);
 }

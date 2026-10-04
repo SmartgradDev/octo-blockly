@@ -1,42 +1,151 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Octo Blockly</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OctoBlockly — Educational Robotics Studio</title>
   </head>
   <body>
+    <!-- Top Application Bar -->
+    <header id="topAppBar">
+      <div class="app-branding">
+        <div class="app-logo-badge">
+          <img id="appLogoImg" alt="Octo" class="app-logo-img" />
+        </div>
+        <div class="app-title-group">
+          <h1 class="app-title">OctoBlockly</h1>
+          <span class="app-subtitle">Robotics Studio</span>
+        </div>
+      </div>
+
+      <div class="top-mission-context">
+        <div class="context-pill">
+          <span class="context-phase" id="topPhaseLabel">Phase 1: Commands</span>
+          <span class="context-divider">·</span>
+          <span class="context-mission" id="topMissionLabel">1. Reach the Star</span>
+        </div>
+        <div class="step-indicator" id="missionStepCounter">Mission 1 of 6</div>
+      </div>
+
+      <div class="top-actions">
+        <button id="topCodeBtn" class="top-action-btn btn-ghost" title="Toggle Code Inspector">
+          <span class="btn-icon">&lt;/&gt;</span> <span>Code</span>
+        </button>
+        <button id="resetBtn" class="top-action-btn btn-secondary" title="Reset Robot to Start">
+          <span class="btn-icon">↺</span> <span>Reset</span>
+        </button>
+        <button id="runBtn" class="top-action-btn btn-primary" title="Execute Blockly Program">
+          <span class="btn-icon">▶</span> <span id="runBtnText">Run Program</span>
+        </button>
+        <button id="nextMissionBtn" class="top-action-btn btn-success" style="display: none;" title="Go to Next Mission">
+          <span>Next Mission</span> <span class="btn-icon">➔</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Application Split Layout -->
     <div id="pageContainer">
-      <div id="outputPane">
-        <div id="missionSelectorPane">
-          <div>
-            <label for="phaseSelect"><strong>Phase:</strong></label>
-            <select id="phaseSelect">
-              <option value="1">Phase 1: Commands</option>
-              <option value="2">Phase 2: Logic</option>
-              <option value="3">Phase 3: Programming abstraction</option>
-            </select>
+      <!-- Left Mission & Simulation Sidebar -->
+      <aside id="outputPane">
+        <!-- Navigation Card: Phase & Mission Dropdowns -->
+        <div class="sidebar-card mission-nav-card" id="missionSelectorPane">
+          <div class="form-group">
+            <label for="phaseSelect" class="form-label">Category</label>
+            <div class="select-container">
+              <select id="phaseSelect">
+                <option value="1">Phase 1: Commands</option>
+                <option value="2">Phase 2: Logic</option>
+                <option value="3">Phase 3: Programming abstraction</option>
+              </select>
+            </div>
           </div>
 
-          <div>
-            <label for="missionSelect"><strong>Mission:</strong></label>
-            <select id="missionSelect"></select>
+          <div class="form-group">
+            <label for="missionSelect" class="form-label">Mission Challenge</label>
+            <div class="select-container">
+              <select id="missionSelect"></select>
+            </div>
           </div>
         </div>
-        <h3 id="missionTitle"></h3>
-        <div id="missionBadges">
-          <span id="conceptsContainer"></span>
+
+        <!-- Mission Goal & Information Card -->
+        <div class="sidebar-card mission-info-card">
+          <div class="mission-info-header">
+            <div class="mission-meta-row">
+              <span class="meta-phase-badge" id="missionPhaseTag">Phase 1</span>
+              <div id="missionBadges">
+                <span id="conceptsContainer"></span>
+              </div>
+            </div>
+            <h2 id="missionTitle">1. Reach the Star</h2>
+          </div>
+          
+          <div class="mission-goal-box">
+            <div class="goal-header">
+              <span class="goal-icon">🎯</span>
+              <span class="goal-title">Challenge Objective</span>
+            </div>
+            <p id="missionDescription">Program the robot to move from (0,0) to the star at (4,4).</p>
+          </div>
         </div>
-        <p id="missionDescription"></p>
-        <div id="simulatorPane"></div>
-        <div id="controlsPane">
-          <button id="runBtn">▶ Run</button>
-          <button id="resetBtn">↺ Reset Mission</button>
+
+        <!-- Robot Simulator Card -->
+        <div class="sidebar-card simulator-card">
+          <div class="simulator-card-header">
+            <span class="card-heading">🎮 Simulation Arena</span>
+          </div>
+          <div id="simulatorPane"></div>
         </div>
-        <div id="statusMessage"></div>
-        <pre id="generatedCode"><code></code></pre>
-        <div id="output"></div>
-      </div>
-      <div id="blocklyDiv"></div>
+
+        <!-- Simulator Quick Controls -->
+        <div class="sidebar-card controls-card" id="controlsPane">
+          <button id="sidebarRunBtn" class="sidebar-action-btn btn-run">
+            <span class="btn-icon">▶</span> <span class="sidebar-run-text">Run Program</span>
+          </button>
+          <button id="sidebarResetBtn" class="sidebar-action-btn btn-reset">
+            <span class="btn-icon">↺</span> <span>Reset</span>
+          </button>
+          <button id="sidebarNextBtn" class="sidebar-action-btn btn-next" style="display: none;">
+            <span>Next Mission</span> <span class="btn-icon">➔</span>
+          </button>
+        </div>
+
+        <!-- Results & Status Card -->
+        <div id="statusMessage" class="status-card">
+          Program the robot to reach the star!
+        </div>
+
+        <!-- Collapsible Code Inspector Card -->
+        <div class="sidebar-card code-inspector-card" id="codeInspectorCard">
+          <div class="code-inspector-header" id="codeInspectorToggle">
+            <div class="header-left">
+              <span class="code-badge">&lt;/&gt;</span>
+              <span class="code-title">Generated JavaScript</span>
+            </div>
+            <span class="toggle-arrow" id="codeToggleIcon">▼</span>
+          </div>
+          <div class="code-inspector-body is-open" id="codeInspectorBody">
+            <pre id="generatedCode"><code></code></pre>
+            <div id="output"></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Blockly Workspace -->
+      <main id="workspaceContainer">
+        <!-- Floating Workspace Toolbar -->
+        <div class="workspace-floating-toolbar" id="workspaceToolbar">
+          <button class="ws-btn" id="wsZoomIn" title="Zoom In (+)">+</button>
+          <button class="ws-btn" id="wsZoomOut" title="Zoom Out (−)">−</button>
+          <button class="ws-btn" id="wsZoomReset" title="Reset View (⛶)">⛶</button>
+          <div class="ws-btn-divider"></div>
+          <button class="ws-btn" id="wsUndo" title="Undo (Ctrl+Z)">↶</button>
+          <button class="ws-btn" id="wsRedo" title="Redo (Ctrl+Y)">↷</button>
+        </div>
+
+        <!-- Blockly Injection Target -->
+        <div id="blocklyDiv"></div>
+      </main>
     </div>
   </body>
 </html>
