@@ -63,10 +63,93 @@ const octoObstacleAhead = {
   helpUrl: '',
 };
 
+const octoDistanceAhead = {
+  type: 'octo_distance_ahead',
+  message0: '📏 distance ahead',
+  output: 'Number',
+  colour: 120,
+  tooltip: 'Returns distance (step count) to the nearest obstacle or wall directly in front of the robot.',
+  helpUrl: '',
+};
+
+const octoColorUnderRobot = {
+  type: 'octo_color_under_robot',
+  message0: '🎨 color under robot',
+  output: 'String',
+  colour: 120,
+  tooltip: 'Returns color of current cell (RED, BLUE, GREEN, YELLOW, or NONE).',
+  helpUrl: '',
+};
+
+const octoColorIs = {
+  type: 'octo_color_is',
+  message0: '🎨 color under robot is %1',
+  args0: [
+    {
+      type: 'field_dropdown',
+      name: 'COLOR',
+      options: [
+        ['RED', 'RED'],
+        ['BLUE', 'BLUE'],
+        ['GREEN', 'GREEN'],
+        ['YELLOW', 'YELLOW'],
+        ['NONE', 'NONE'],
+      ],
+    },
+  ],
+  output: 'Boolean',
+  colour: 120,
+  tooltip: 'Returns true if the cell under the robot matches the selected color.',
+  helpUrl: '',
+};
+
+const octoLineSensor = {
+  type: 'octo_line_sensor',
+  message0: '🛤 line detected on %1?',
+  args0: [
+    {
+      type: 'field_dropdown',
+      name: 'DIR',
+      options: [
+        ['CENTER', 'CENTER'],
+        ['LEFT', 'LEFT'],
+        ['RIGHT', 'RIGHT'],
+      ],
+    },
+  ],
+  output: 'Boolean',
+  colour: 120,
+  tooltip: 'Returns true if a track line exists at the specified position relative to the robot heading.',
+  helpUrl: '',
+};
+
+const octoSetMotorSpeed = {
+  type: 'octo_set_motor_speed',
+  message0: '⚡ set motor speed %1',
+  args0: [
+    {
+      type: 'input_value',
+      name: 'SPEED',
+      check: 'Number',
+    },
+  ],
+  inputsInline: true,
+  previousStatement: null,
+  nextStatement: null,
+  colour: 210,
+  tooltip: 'Set robot motor speed (0 to 100).',
+  helpUrl: '',
+};
+
 export const robotBlocks = Blockly.common.createBlockDefinitionsFromJsonArray([
   octoMoveForward,
   octoMoveBackward,
   octoTurnLeft,
   octoTurnRight,
+  octoSetMotorSpeed,
   octoObstacleAhead,
+  octoDistanceAhead,
+  octoColorUnderRobot,
+  octoColorIs,
+  octoLineSensor,
 ]);

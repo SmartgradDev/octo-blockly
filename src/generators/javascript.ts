@@ -71,3 +71,41 @@ forBlock['octo_obstacle_ahead'] = function (
 ) {
   return ['isObstacleAhead()', Order.ATOMIC];
 };
+
+forBlock['octo_set_motor_speed'] = function (
+  block: Blockly.Block,
+  generator: Blockly.CodeGenerator,
+) {
+  const speed = generator.valueToCode(block, 'SPEED', Order.NONE) || '50';
+  return `setMotorSpeed(${speed});\n`;
+};
+
+forBlock['octo_distance_ahead'] = function (
+  _block: Blockly.Block,
+  _generator: Blockly.CodeGenerator,
+) {
+  return ['getDistanceAhead()', Order.ATOMIC];
+};
+
+forBlock['octo_color_under_robot'] = function (
+  _block: Blockly.Block,
+  _generator: Blockly.CodeGenerator,
+) {
+  return ['getColorUnderRobot()', Order.ATOMIC];
+};
+
+forBlock['octo_color_is'] = function (
+  block: Blockly.Block,
+  _generator: Blockly.CodeGenerator,
+) {
+  const color = block.getFieldValue('COLOR') || 'NONE';
+  return [`isColorUnderRobot('${color}')`, Order.ATOMIC];
+};
+
+forBlock['octo_line_sensor'] = function (
+  block: Blockly.Block,
+  _generator: Blockly.CodeGenerator,
+) {
+  const dir = block.getFieldValue('DIR') || 'CENTER';
+  return [`isLineDetected('${dir}')`, Order.ATOMIC];
+};

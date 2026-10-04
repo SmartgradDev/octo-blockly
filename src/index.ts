@@ -45,8 +45,8 @@ const updateBestScore = (
 };
 
 // ── Active Mission State & Configuration ────────────────────────────
-let currentPhaseMissions: Mission[] = getMissionsByPhase(1);
-let currentMission: Mission = currentPhaseMissions[0];
+let activeMissionsList: Mission[] = getMissionsByPhase(1);
+let currentMission: Mission = activeMissionsList[0];
 
 const grid: GridConfig = {
   width: currentMission.gridSize,
@@ -76,8 +76,12 @@ const ws = Blockly.inject(blocklyDiv, {toolbox});
 
 // ── Helper: update the generated code preview ───────────────────────
 const updateCodePreview = () => {
-  const code = javascriptGenerator.workspaceToCode(ws as Blockly.Workspace);
-  if (codeDiv) codeDiv.textContent = code;
+  try {
+    const code = javascriptGenerator.workspaceToCode(ws as Blockly.Workspace);
+    if (codeDiv) codeDiv.textContent = code;
+  } catch (err) {
+    console.warn('Error generating code preview:', err);
+  }
 };
 
 // ── Helper: set a status message ────────────────────────────────────
@@ -100,6 +104,11 @@ const isTargetReached = (): boolean => {
   );
 };
 
+import {
+  evaluateMission,
+  MissionRuntimeState,
+} from './robot/MissionEvaluator';
+
 // ── Helper: Load & switch mission ───────────────────────────────────
 const loadMission = (mission: Mission) => {
   stopRequested = true;
@@ -112,9 +121,39 @@ const loadMission = (mission: Mission) => {
   robot.x = mission.start.x;
   robot.y = mission.start.y;
   robot.direction = mission.start.direction;
+  robot.motorSpeed = 50;
+  robot.battery =
+    mission.initialBattery !== undefined
+      ? Math.max(0, mission.initialBattery)
+      : undefined;
+  robot.maxBattery =
+    mission.initialBattery !== undefined
+      ? Math.max(0, mission.initialBattery)
+      : undefined;
 
   if (missionTitleEl) missionTitleEl.textContent = mission.title;
   if (missionDescEl) missionDescEl.textContent = mission.description;
+
+  const conceptsContainerEl = document.getElementById('conceptsContainer');
+  if (conceptsContainerEl) {
+    conceptsContainerEl.innerHTML = '';
+    const concepts = mission.concepts || [];
+    concepts.forEach((c) => {
+      const tag = document.createElement('span');
+      tag.className = 'concept-tag';
+      tag.textContent = c;
+      conceptsContainerEl.appendChild(tag);
+    });
+  }
+
+  const initialRuntimeState: MissionRuntimeState = {
+    collectedItems: [],
+    visitedColors: new Set(),
+    executedActions: 0,
+    batteryDepleted: false,
+  };
+
+  const initialEval = evaluateMission(mission, robot, initialRuntimeState);
 
   if (simulatorPane) {
     renderGrid(
@@ -123,6 +162,11 @@ const loadMission = (mission: Mission) => {
       robot,
       mission.target,
       mission.obstacles,
+      mission.cellColors,
+      mission.lines,
+      mission.items,
+      initialRuntimeState.collectedItems,
+      initialEval.progressText,
     );
   }
 
@@ -134,7 +178,7 @@ const loadMission = (mission: Mission) => {
   setStatus(`Loaded ${mission.title}${bestStr}. Program the robot!`);
 };
 
-// Helper to populate Mission Selector Dropdown for active phase
+// Helper to populate Mission Selector Dropdown for active list
 const populateMissionDropdown = (missions: Mission[]) => {
   if (!missionSelect) return;
   missionSelect.innerHTML = '';
@@ -146,31 +190,35 @@ const populateMissionDropdown = (missions: Mission[]) => {
   });
 };
 
-// Wire up Phase / Level Selector (Novice vs Proficient)
+// Helper to update missions list when phase changes
+const updateMissionsList = () => {
+  const phaseId = phaseSelect ? parseInt(phaseSelect.value, 10) : 1;
+  activeMissionsList = getMissionsByPhase(phaseId);
+  populateMissionDropdown(activeMissionsList);
+
+  if (activeMissionsList.length > 0) {
+    loadMission(activeMissionsList[0]);
+  }
+};
+
+// Wire up Phase Selector
 if (phaseSelect) {
-  phaseSelect.addEventListener('change', (e) => {
-    const phaseId = parseInt((e.target as HTMLSelectElement).value, 10);
-    currentPhaseMissions = getMissionsByPhase(phaseId);
-    populateMissionDropdown(currentPhaseMissions);
-    if (currentPhaseMissions.length > 0) {
-      loadMission(currentPhaseMissions[0]);
-    }
-  });
+  phaseSelect.addEventListener('change', updateMissionsList);
 }
 
 // Wire up Mission Selector Dropdown
 if (missionSelect) {
   missionSelect.addEventListener('change', (e) => {
     const idx = parseInt((e.target as HTMLSelectElement).value, 10);
-    if (currentPhaseMissions[idx]) {
-      loadMission(currentPhaseMissions[idx]);
+    if (!isNaN(idx) && activeMissionsList[idx]) {
+      loadMission(activeMissionsList[idx]);
     }
   });
 }
 
 // Initial setup
-populateMissionDropdown(currentPhaseMissions);
-loadMission(currentPhaseMissions[0]);
+populateMissionDropdown(activeMissionsList);
+loadMission(activeMissionsList[0]);
 
 // ── Run: step-by-step dynamic AST interpretation & execution ────────
 const runProgram = async () => {
@@ -185,6 +233,50 @@ const runProgram = async () => {
   robot.x = currentMission.start.x;
   robot.y = currentMission.start.y;
   robot.direction = currentMission.start.direction;
+  robot.motorSpeed = 50;
+  robot.battery =
+    currentMission.initialBattery !== undefined
+      ? Math.max(0, currentMission.initialBattery)
+      : undefined;
+  robot.maxBattery =
+    currentMission.initialBattery !== undefined
+      ? Math.max(0, currentMission.initialBattery)
+      : undefined;
+
+  const runtimeState: MissionRuntimeState = {
+    collectedItems: [],
+    visitedColors: new Set(),
+    executedActions: 0,
+    batteryDepleted: false,
+  };
+
+  const checkCellVisit = () => {
+    if (currentMission.items) {
+      for (const item of currentMission.items) {
+        if (
+          item.x === robot.x &&
+          item.y === robot.y &&
+          !runtimeState.collectedItems.some(
+            (ci) => ci.x === item.x && ci.y === item.y,
+          )
+        ) {
+          runtimeState.collectedItems.push(item);
+        }
+      }
+    }
+    if (currentMission.cellColors) {
+      const colorCell = currentMission.cellColors.find(
+        (c) => c.x === robot.x && c.y === robot.y,
+      );
+      if (colorCell) {
+        runtimeState.visitedColors.add(colorCell.color);
+      }
+    }
+  };
+
+  checkCellVisit();
+  let currentEval = evaluateMission(currentMission, robot, runtimeState);
+
   if (simulatorPane) {
     renderGrid(
       simulatorPane,
@@ -192,6 +284,11 @@ const runProgram = async () => {
       robot,
       currentMission.target,
       currentMission.obstacles,
+      currentMission.cellColors,
+      currentMission.lines,
+      currentMission.items,
+      runtimeState.collectedItems,
+      currentEval.progressText,
     );
   }
 
@@ -200,13 +297,14 @@ const runProgram = async () => {
     robot,
     grid,
     currentMission.obstacles,
+    currentMission.cellColors,
+    currentMission.lines,
   );
 
   setStatus('Starting execution...');
 
   const startTime = performance.now();
   let hadError = false;
-  let targetReached = isTargetReached();
 
   while (!interpreter.isDone()) {
     if (stopRequested) {
@@ -219,7 +317,8 @@ const runProgram = async () => {
     if (stepResult.limitExceeded) {
       hadError = true;
       setStatus(
-        '⚠️ Program limit exceeded! Maximum 500 robot commands per run.',
+        stepResult.error ||
+          '⚠️ Program limit exceeded! Maximum 500 robot commands per run.',
         'error',
       );
       break;
@@ -239,6 +338,14 @@ const runProgram = async () => {
       currentMission.obstacles,
     );
 
+    runtimeState.executedActions = executedCount;
+    if (!result.ok && result.message.includes('Battery depleted')) {
+      runtimeState.batteryDepleted = true;
+    }
+
+    checkCellVisit();
+    currentEval = evaluateMission(currentMission, robot, runtimeState);
+
     if (simulatorPane) {
       renderGrid(
         simulatorPane,
@@ -246,6 +353,11 @@ const runProgram = async () => {
         robot,
         currentMission.target,
         currentMission.obstacles,
+        currentMission.cellColors,
+        currentMission.lines,
+        currentMission.items,
+        runtimeState.collectedItems,
+        currentEval.progressText,
       );
     }
 
@@ -258,8 +370,13 @@ const runProgram = async () => {
       break;
     }
 
-    if (isTargetReached()) {
-      targetReached = true;
+    if (currentEval.failed) {
+      hadError = true;
+      setStatus(currentEval.message, 'error');
+      break;
+    }
+
+    if (currentEval.completed) {
       const elapsedTimeMs = performance.now() - startTime;
       const blockCount = ws.getAllBlocks(false).length;
 
@@ -282,6 +399,7 @@ const runProgram = async () => {
 
       setStatus(
         `🎉 Mission Complete!\n` +
+          `${currentEval.message}\n` +
           `Rating: ${scoreResult.starDisplay} (${scoreResult.stars} ${scoreResult.stars === 1 ? 'star' : 'stars'})\n` +
           `Score: ${scoreResult.score}\n` +
           `Actions: ${scoreResult.executedActionCount} | Blocks: ${scoreResult.blockCount}\n` +
@@ -294,17 +412,18 @@ const runProgram = async () => {
       setStatus(`Step ${executedCount} (${cmd}): ${result.message}`);
     }
 
-    // Delay 400ms between steps for visual animation
-    await delay(400);
+    // Dynamic step delay scaling based on robot.motorSpeed (50 speed -> 450ms, 100 speed -> 100ms)
+    const stepDelay = Math.max(100, Math.round(800 - robot.motorSpeed * 7));
+    await delay(stepDelay);
   }
 
   const totalExecuted = interpreter.getExecutedCommandCount();
 
   if (totalExecuted === 0 && !hadError && !stopRequested) {
     setStatus('No robot commands found. Drag some blocks!');
-  } else if (!stopRequested && !hadError && !targetReached) {
+  } else if (!stopRequested && !hadError && !currentEval.completed) {
     setStatus(
-      `Robot stopped at (${robot.x}, ${robot.y}), but hasn't reached the star yet. Try again!`,
+      `Robot stopped at (${robot.x}, ${robot.y}), but objective is not completed yet. Try again!`,
     );
   }
 
@@ -323,6 +442,25 @@ const resetRobot = () => {
   robot.x = currentMission.start.x;
   robot.y = currentMission.start.y;
   robot.direction = currentMission.start.direction;
+  robot.motorSpeed = 50;
+  robot.battery =
+    currentMission.initialBattery !== undefined
+      ? Math.max(0, currentMission.initialBattery)
+      : undefined;
+  robot.maxBattery =
+    currentMission.initialBattery !== undefined
+      ? Math.max(0, currentMission.initialBattery)
+      : undefined;
+
+  const resetRuntimeState: MissionRuntimeState = {
+    collectedItems: [],
+    visitedColors: new Set(),
+    executedActions: 0,
+    batteryDepleted: false,
+  };
+
+  const initialEval = evaluateMission(currentMission, robot, resetRuntimeState);
+
   if (simulatorPane) {
     renderGrid(
       simulatorPane,
@@ -330,6 +468,11 @@ const resetRobot = () => {
       robot,
       currentMission.target,
       currentMission.obstacles,
+      currentMission.cellColors,
+      currentMission.lines,
+      currentMission.items,
+      resetRuntimeState.collectedItems,
+      initialEval.progressText,
     );
   }
 

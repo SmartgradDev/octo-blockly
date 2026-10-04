@@ -8,19 +8,24 @@
     <div id="pageContainer">
       <div id="outputPane">
         <div id="missionSelectorPane">
-          <label for="phaseSelect"><strong>Level:</strong></label>
-          <select id="phaseSelect">
-            <option value="1">Novice (Phase 1)</option>
-            <option value="2">Proficient (Phase 2)</option>
-          </select>
+          <div>
+            <label for="phaseSelect"><strong>Phase:</strong></label>
+            <select id="phaseSelect">
+              <option value="1">Phase 1: Commands</option>
+              <option value="2">Phase 2: Logic</option>
+              <option value="3">Phase 3: Programming abstraction</option>
+            </select>
+          </div>
 
           <div>
             <label for="missionSelect"><strong>Mission:</strong></label>
             <select id="missionSelect"></select>
           </div>
-          
         </div>
         <h3 id="missionTitle"></h3>
+        <div id="missionBadges">
+          <span id="conceptsContainer"></span>
+        </div>
         <p id="missionDescription"></p>
         <div id="simulatorPane"></div>
         <div id="controlsPane">

@@ -40,6 +40,22 @@ export const toolbox = {
           kind: 'block',
           type: 'octo_obstacle_ahead',
         },
+        {
+          kind: 'block',
+          type: 'octo_distance_ahead',
+        },
+        {
+          kind: 'block',
+          type: 'octo_color_under_robot',
+        },
+        {
+          kind: 'block',
+          type: 'octo_color_is',
+        },
+        {
+          kind: 'block',
+          type: 'octo_line_sensor',
+        },
       ],
     },
     {
