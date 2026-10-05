@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OctoBlockly — Step 2: Advanced Phaser Simulator</title>
   </head>
-  <body>
+  <body class="step2-body">
     <!-- Top Application Bar -->
-    <header id="topAppBar">
+    <header id="topAppBar" class="step2-topbar">
       <div class="app-branding">
         <div class="app-logo-badge">
           <img id="appLogoImg" alt="Octo" class="app-logo-img" />
         </div>
         <div class="app-title-group">
           <h1 class="app-title">OctoBlockly</h1>
-          <span class="app-subtitle">Step 2: Phaser 4 Engine</span>
+          <span class="app-subtitle">Step 2 · Advanced World Simulator</span>
         </div>
       </div>
 
@@ -34,10 +34,10 @@
         <button id="runBtn" class="top-action-btn btn-primary" title="Execute Blockly Program">
           <span class="btn-icon">▶</span> <span id="runBtnText">Run</span>
         </button>
-        <button id="pauseBtn" class="top-action-btn btn-secondary" style="display: none;" title="Pause Execution">
+        <button id="pauseBtn" class="top-action-btn btn-warning-action" style="display: none;" title="Pause Execution">
           <span class="btn-icon">⏸</span> <span>Pause</span>
         </button>
-        <button id="stopBtn" class="top-action-btn btn-secondary" style="display: none;" title="Stop Execution">
+        <button id="stopBtn" class="top-action-btn btn-danger-action" style="display: none;" title="Stop Execution">
           <span class="btn-icon">⏹</span> <span>Stop</span>
         </button>
         <button id="resetBtn" class="top-action-btn btn-secondary" title="Reset Robot to Start">
@@ -48,17 +48,21 @@
         </button>
         <div class="step-mode-switcher">
           <a href="index.html" class="mode-link" title="Switch to Step 1: Basic Simulator">⬅ Step 1: Basic</a>
-          <span class="mode-badge active">Step 2: Phaser</span>
+          <span class="mode-badge active">Step 2: World</span>
         </div>
       </div>
     </header>
 
-    <!-- Main Application Split Layout -->
-    <div id="pageContainer">
-      <!-- Left Mission & Simulation Sidebar -->
-      <aside id="outputPane">
+    <!-- Main Application 3-Column Split Layout -->
+    <div id="pageContainer" class="step2-layout">
+      <!-- 1. Left Column: Mission & Controls Sidebar -->
+      <aside id="outputPane" class="step2-sidebar">
         <!-- Navigation Card: Phase & Mission Dropdowns -->
         <div class="sidebar-card mission-nav-card" id="missionSelectorPane">
+          <div class="sidebar-card-title">
+            <span class="card-icon">🧭</span>
+            <span>Mission Selection</span>
+          </div>
           <div class="form-group">
             <label for="phaseSelect" class="form-label">Category</label>
             <div class="select-container">
@@ -99,33 +103,27 @@
           </div>
         </div>
 
-        <!-- Step 2: Advanced Phaser 4 Robot Simulator Card -->
-        <div class="sidebar-card simulator-card">
-          <div class="simulator-card-header">
-            <span class="card-heading">🎮 Phaser 4 Simulation World</span>
-            <span class="meta-phase-badge" style="background:#e0e7ff; color:#4338ca;">Step 2</span>
+        <!-- Primary Execution Controls Card -->
+        <div class="sidebar-card step2-controls-card" id="controlsPane">
+          <div class="sidebar-card-title">
+            <span class="card-icon">⚡</span>
+            <span>Simulation Controls</span>
           </div>
-          <!-- Dedicated Phaser Canvas Mount Container -->
-          <div id="phaserSimulatorContainer" class="phaser-simulator-wrapper"></div>
-          <!-- Robot Telemetry HUD -->
-          <div id="telemetryHud" class="robot-hud robot-status"></div>
-        </div>
-
-        <!-- Simulator Quick Controls -->
-        <div class="sidebar-card controls-card" id="controlsPane">
-          <button id="sidebarRunBtn" class="sidebar-action-btn btn-run">
-            <span class="btn-icon">▶</span> <span class="sidebar-run-text">Run</span>
-          </button>
-          <button id="sidebarPauseBtn" class="sidebar-action-btn btn-secondary" style="display: none;">
-            <span class="btn-icon">⏸</span> <span>Pause</span>
-          </button>
-          <button id="sidebarStopBtn" class="sidebar-action-btn btn-secondary" style="display: none;">
-            <span class="btn-icon">⏹</span> <span>Stop</span>
-          </button>
-          <button id="sidebarResetBtn" class="sidebar-action-btn btn-reset">
-            <span class="btn-icon">↺</span> <span>Reset</span>
-          </button>
-          <button id="sidebarNextBtn" class="sidebar-action-btn btn-next" style="display: none;">
+          <div class="controls-btn-grid">
+            <button id="sidebarRunBtn" class="sidebar-action-btn btn-run" title="Run / Resume Program">
+              <span class="btn-icon">▶</span> <span class="sidebar-run-text">Run</span>
+            </button>
+            <button id="sidebarPauseBtn" class="sidebar-action-btn btn-pause" style="display: none;" title="Pause Execution">
+              <span class="btn-icon">⏸</span> <span>Pause</span>
+            </button>
+            <button id="sidebarStopBtn" class="sidebar-action-btn btn-stop" style="display: none;" title="Stop Execution">
+              <span class="btn-icon">⏹</span> <span>Stop</span>
+            </button>
+            <button id="sidebarResetBtn" class="sidebar-action-btn btn-reset" title="Reset Robot to Start">
+              <span class="btn-icon">↺</span> <span>Reset</span>
+            </button>
+          </div>
+          <button id="sidebarNextBtn" class="sidebar-action-btn btn-next" style="display: none;" title="Advance to Next Mission">
             <span>Next Mission</span> <span class="btn-icon">➔</span>
           </button>
         </div>
@@ -151,8 +149,18 @@
         </div>
       </aside>
 
-      <!-- Center Blockly Workspace -->
-      <main id="workspaceContainer">
+      <!-- 2. Middle Column: Blockly Workspace -->
+      <main id="workspaceContainer" class="step2-workspace">
+        <div class="workspace-header-bar">
+          <div class="ws-header-title">
+            <span class="ws-title-icon">🧩</span>
+            <span class="ws-title-text">Blockly Programming</span>
+          </div>
+          <div class="ws-header-hints">
+            <span>Drag blocks to command the robot</span>
+          </div>
+        </div>
+
         <!-- Floating Workspace Toolbar -->
         <div class="workspace-floating-toolbar" id="workspaceToolbar">
           <button class="ws-btn" id="wsZoomIn" title="Zoom In (+)">+</button>
@@ -166,6 +174,31 @@
         <!-- Blockly Injection Target -->
         <div id="blocklyDiv"></div>
       </main>
+
+      <!-- 3. Right Column: Large Interactive Phaser Simulator Viewport -->
+      <section id="step2SimulatorArea" class="step2-simulator-panel">
+        <div class="sim-panel-header">
+          <div class="sim-panel-title-group">
+            <div class="sim-live-indicator">
+              <span class="pulse-dot"></span>
+              <span class="live-label">LIVE SIMULATOR</span>
+            </div>
+            <h2 class="sim-panel-title">Phaser 4 World Viewport</h2>
+            <span class="sim-panel-meta">Campus Town · 800 × 600</span>
+          </div>
+          <div class="sim-panel-badges">
+            <span class="sim-badge-tech">Continuous World</span>
+            <span class="sim-badge-tech">Phaser 4 Engine</span>
+          </div>
+        </div>
+
+        <!-- Dedicated Phaser Canvas Mount Container -->
+        <div id="phaserSimulatorContainer" class="step2-phaser-container"></div>
+
+        <!-- Robot Telemetry HUD at bottom of simulator viewport -->
+        <div id="telemetryHud" class="step2-telemetry-hud"></div>
+      </section>
     </div>
   </body>
 </html>
+

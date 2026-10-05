@@ -834,7 +834,19 @@ document.getElementById('wsRedo')?.addEventListener('click', () => {
 
 window.addEventListener('resize', () => {
   Blockly.svgResize(ws as Blockly.WorkspaceSvg);
+  phaserSimulator?.refreshScale();
 });
+
+if (typeof ResizeObserver !== 'undefined') {
+  const resizeObserver = new ResizeObserver(() => {
+    Blockly.svgResize(ws as Blockly.WorkspaceSvg);
+    phaserSimulator?.refreshScale();
+  });
+  const wsPanel = document.getElementById('workspaceContainer');
+  const simPanel = document.getElementById('phaserSimulatorContainer');
+  if (wsPanel) resizeObserver.observe(wsPanel);
+  if (simPanel) resizeObserver.observe(simPanel);
+}
 
 if (ws) {
   load(ws);

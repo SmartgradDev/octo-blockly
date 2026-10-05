@@ -37,14 +37,12 @@ export class PhaserSimulator {
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
       parent: parent,
-      width: parent.clientWidth || 320,
-      height: 380,
       transparent: true,
       scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         width: '100%',
-        height: 380,
+        height: '100%',
       },
       scene: [sceneInstance],
     };
@@ -57,6 +55,15 @@ export class PhaserSimulator {
         this.scene.updateSimulationState(this.pendingRenderData);
       }
     });
+  }
+
+  /**
+   * Refreshes Phaser's scale manager when the container layout resizes.
+   */
+  public refreshScale(): void {
+    if (this.game && this.game.scale) {
+      this.game.scale.refresh();
+    }
   }
 
   /**

@@ -36,15 +36,20 @@ export class PhaserGridRenderer implements GridCoordinateConverter {
   private gridOffsetX: number = 0;
   private gridOffsetY: number = 0;
   private cellSize: number = 44;
+  private showGridBoard: boolean = false; // False by default so continuous world shines through in Step 2
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.backgroundGraphics = scene.add.graphics();
-    this.cellsGraphics = scene.add.graphics();
+    this.backgroundGraphics = scene.add.graphics().setDepth(20);
+    this.cellsGraphics = scene.add.graphics().setDepth(25);
     this.textGroup = scene.add.group();
 
     // Dedicated RobotRenderer instance
     this.robotRenderer = new RobotRenderer(scene, this);
+  }
+
+  public setShowGridBoard(show: boolean): void {
+    this.showGridBoard = show;
   }
 
   /**
@@ -93,101 +98,102 @@ export class PhaserGridRenderer implements GridCoordinateConverter {
     this.cellsGraphics.clear();
     this.textGroup.clear(true, true);
 
-    // 3. Render board background wrapper
-    this.backgroundGraphics.fillStyle(0xf8fafc, 1);
-    this.backgroundGraphics.fillRoundedRect(
-      this.gridOffsetX - 8,
-      this.gridOffsetY - 8,
-      totalGridW + 16,
-      totalGridH + 16,
-      12,
-    );
-    this.backgroundGraphics.lineStyle(1.5, 0xe2e8f0, 1);
-    this.backgroundGraphics.strokeRoundedRect(
-      this.gridOffsetX - 8,
-      this.gridOffsetY - 8,
-      totalGridW + 16,
-      totalGridH + 16,
-      12,
-    );
+    // 3. Render board background wrapper and cells if showGridBoard enabled
+    if (this.showGridBoard) {
+      this.backgroundGraphics.fillStyle(0xf8fafc, 1);
+      this.backgroundGraphics.fillRoundedRect(
+        this.gridOffsetX - 8,
+        this.gridOffsetY - 8,
+        totalGridW + 16,
+        totalGridH + 16,
+        12,
+      );
+      this.backgroundGraphics.lineStyle(1.5, 0xe2e8f0, 1);
+      this.backgroundGraphics.strokeRoundedRect(
+        this.gridOffsetX - 8,
+        this.gridOffsetY - 8,
+        totalGridW + 16,
+        totalGridH + 16,
+        12,
+      );
+    }
 
-    // 4. Render grid cells, colors, lines, items, obstacles, target
-    const collectedList = collectedItems || [];
+    // 4. Render grid cells, colors, lines, items, obstacles, target (only if showGridBoard enabled)
+    if (this.showGridBoard) {
+      const collectedList = collectedItems || [];
 
-    for (let row = 0; row < grid.height; row++) {
-      for (let col = 0; col < grid.width; col++) {
-        const x = this.gridOffsetX + col * this.cellSize;
-        const y = this.gridOffsetY + row * this.cellSize;
-        const inset = 3;
-        const drawSize = this.cellSize - inset * 2;
+      for (let row = 0; row < grid.height; row++) {
+        for (let col = 0; col < grid.width; col++) {
+          const x = this.gridOffsetX + col * this.cellSize;
+          const y = this.gridOffsetY + row * this.cellSize;
+          const inset = 3;
+          const drawSize = this.cellSize - inset * 2;
 
-        const isObstacle = obstacles && obstacles.some((o) => o.x === col && o.y === row);
-        const isTarget = target && target.x === col && target.y === row;
-        const coloredCell = cellColors && cellColors.find((c) => c.x === col && c.y === row);
-        const isLine = lines && lines.some((l) => l.x === col && l.y === row);
-        const isUncollectedItem =
-          items &&
-          items.some((it) => it.x === col && it.y === row) &&
-          !collectedList.some((ci) => ci.x === col && ci.y === row);
+          const isObstacle = obstacles && obstacles.some((o) => o.x === col && o.y === row);
+          const isTarget = target && target.x === col && target.y === row;
+          const coloredCell = cellColors && cellColors.find((c) => c.x === col && c.y === row);
+          const isLine = lines && lines.some((l) => l.x === col && l.y === row);
+          const isUncollectedItem =
+            items &&
+            items.some((it) => it.x === col && it.y === row) &&
+            !collectedList.some((ci) => ci.x === col && ci.y === row);
 
-        // Cell base background fill & border
-        let cellBgColor = 0xffffff;
-        let borderColor = 0xe2e8f0;
+          let cellBgColor = 0xffffff;
+          let borderColor = 0xe2e8f0;
 
-        if (coloredCell) {
-          switch (coloredCell.color.toUpperCase()) {
-            case 'RED':
-              cellBgColor = 0xfee2e2;
-              borderColor = 0xf87171;
-              break;
-            case 'BLUE':
-              cellBgColor = 0xdbeafe;
-              borderColor = 0x60a5fa;
-              break;
-            case 'GREEN':
-              cellBgColor = 0xdcfce7;
-              borderColor = 0x4ade80;
-              break;
-            case 'YELLOW':
-              cellBgColor = 0xfef9c3;
-              borderColor = 0xfacc15;
-              break;
+          if (coloredCell) {
+            switch (coloredCell.color.toUpperCase()) {
+              case 'RED':
+                cellBgColor = 0xfee2e2;
+                borderColor = 0xf87171;
+                break;
+              case 'BLUE':
+                cellBgColor = 0xdbeafe;
+                borderColor = 0x60a5fa;
+                break;
+              case 'GREEN':
+                cellBgColor = 0xdcfce7;
+                borderColor = 0x4ade80;
+                break;
+              case 'YELLOW':
+                cellBgColor = 0xfef9c3;
+                borderColor = 0xfacc15;
+                break;
+            }
           }
-        }
 
-        if (isLine) {
-          cellBgColor = 0xeff6ff;
-          borderColor = 0x93c5fd;
-        }
+          if (isLine) {
+            cellBgColor = 0xeff6ff;
+            borderColor = 0x93c5fd;
+          }
 
-        if (isObstacle) {
-          cellBgColor = 0xf1f5f9;
-          borderColor = 0x94a3b8;
-        } else if (isTarget) {
-          cellBgColor = 0xfefce8;
-          borderColor = 0xfacc15;
-        }
+          if (isObstacle) {
+            cellBgColor = 0xf1f5f9;
+            borderColor = 0x94a3b8;
+          } else if (isTarget) {
+            cellBgColor = 0xfefce8;
+            borderColor = 0xfacc15;
+          }
 
-        // Draw cell rectangle
-        this.cellsGraphics.fillStyle(cellBgColor, 1);
-        this.cellsGraphics.fillRoundedRect(x + inset, y + inset, drawSize, drawSize, 6);
-        this.cellsGraphics.lineStyle(1.5, borderColor, 1);
-        this.cellsGraphics.strokeRoundedRect(x + inset, y + inset, drawSize, drawSize, 6);
+          this.cellsGraphics.fillStyle(cellBgColor, 1);
+          this.cellsGraphics.fillRoundedRect(x + inset, y + inset, drawSize, drawSize, 6);
+          this.cellsGraphics.lineStyle(1.5, borderColor, 1);
+          this.cellsGraphics.strokeRoundedRect(x + inset, y + inset, drawSize, drawSize, 6);
 
-        const centerX = x + this.cellSize / 2;
-        const centerY = y + this.cellSize / 2;
+          const centerX = x + this.cellSize / 2;
+          const centerY = y + this.cellSize / 2;
 
-        // Render cell contents
-        if (isObstacle) {
-          this.cellsGraphics.fillStyle(0x64748b, 0.4);
-          this.cellsGraphics.fillRoundedRect(x + inset + 4, y + inset + 4, drawSize - 8, drawSize - 8, 4);
-          this.createText(centerX, centerY, '🪨', 16);
-        } else if (isTarget) {
-          this.createText(centerX, centerY, '⭐', 18);
-        } else if (isUncollectedItem) {
-          this.createText(centerX, centerY, '💎', 16);
-        } else if (isLine && !coloredCell) {
-          this.createText(centerX, centerY, '🛤️', 14);
+          if (isObstacle) {
+            this.cellsGraphics.fillStyle(0x64748b, 0.4);
+            this.cellsGraphics.fillRoundedRect(x + inset + 4, y + inset + 4, drawSize - 8, drawSize - 8, 4);
+            this.createText(centerX, centerY, '🪨', 16);
+          } else if (isTarget) {
+            this.createText(centerX, centerY, '⭐', 18);
+          } else if (isUncollectedItem) {
+            this.createText(centerX, centerY, '💎', 16);
+          } else if (isLine && !coloredCell) {
+            this.createText(centerX, centerY, '🛤️', 14);
+          }
         }
       }
     }

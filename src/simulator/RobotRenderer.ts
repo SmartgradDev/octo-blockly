@@ -57,8 +57,8 @@ export class RobotRenderer {
     this.coordinateConverter = coordinateConverter;
     this.config = {...DEFAULT_ROBOT_RENDERER_CONFIG, ...config};
 
-    // Create container for grouping all robot sub-elements
-    this.container = this.scene.add.container(0, 0);
+    // Create container for grouping all robot sub-elements (depth 100 on top of world layers)
+    this.container = this.scene.add.container(0, 0).setDepth(100);
 
     // Body graphics (chassis, visor, treads/pads)
     this.bodyGraphics = this.scene.add.graphics();
