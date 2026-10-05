@@ -20,6 +20,8 @@ export interface BoundingBox2D extends Point2D, Size2D {}
 
 export * from './RoadData';
 import {WorldRoad, WorldIntersection} from './RoadData';
+import {WorldMissionObject} from './WorldMissionObject';
+export * from './WorldMissionObject';
 
 /**
  * Legacy road segment format (retained for backward compatibility).
@@ -105,6 +107,7 @@ export interface WorldMapData {
   parks?: ParkZone[];
   restrictedZones?: PolygonZone[];
   objectives: WorldObjectiveTarget[];
+  missionObjects?: WorldMissionObject[];
   spawnPoint: {
     position: Point2D;
     rotation: number;         // Continuous heading in radians

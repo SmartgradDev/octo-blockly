@@ -405,7 +405,38 @@ const loadMission = (mission: Mission) => {
   const activePolicy =
     mission.movementPolicy || activeWorldMap.movementPolicy || 'FREE_WORLD';
   worldCommandExecutor.setMovementPolicy(activePolicy);
-  const initialEval = evaluateWorldMission(activeWorldMap, worldRobot);
+
+  // If mission has items (or activeWorldMap has missionObjects), load them into MissionObjectSystem
+  if (mission.items && mission.items.length > 0) {
+    // Map grid mission items to continuous world coordinates (e.g. aligned with Campus Way / town)
+    const missionObjects: import('./simulator/world').WorldMissionObject[] = mission.items.map(
+      (item, idx) => ({
+        id: `mission_item_${idx + 1}`,
+        type: 'COLLECTIBLE',
+        x: 120 + item.x * 65,
+        y: 300 + (item.y - 1) * 65,
+        interactionRadius: 18,
+        state: 'AVAILABLE',
+        color: 0x38bdf8,
+        iconSymbol: '💎',
+        label: `Gem ${idx + 1}`,
+      }),
+    );
+    worldCommandExecutor.setMissionObjects(missionObjects);
+    phaserSimulator?.updateMissionObjects(missionObjects);
+  } else if (activeWorldMap.missionObjects && activeWorldMap.missionObjects.length > 0) {
+    worldCommandExecutor.setMissionObjects(activeWorldMap.missionObjects);
+    phaserSimulator?.updateMissionObjects(activeWorldMap.missionObjects);
+  } else {
+    worldCommandExecutor.setMissionObjects([]);
+    phaserSimulator?.updateMissionObjects([]);
+  }
+
+  const initialEval = evaluateWorldMission(
+    activeWorldMap,
+    worldRobot,
+    worldCommandExecutor.getMissionObjectSystem(),
+  );
 
   updateStep2View(
     initialEval.progressText,
@@ -554,7 +585,14 @@ const runProgram = async () => {
       : undefined;
 
   worldCommandExecutor.getAdapter().resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
-  let currentEval = evaluateWorldMission(activeWorldMap, worldRobot);
+  worldCommandExecutor.getMissionObjectSystem().reset();
+  phaserSimulator?.updateMissionObjects(worldCommandExecutor.getMissionObjectSystem().getObjects());
+
+  let currentEval = evaluateWorldMission(
+    activeWorldMap,
+    worldRobot,
+    worldCommandExecutor.getMissionObjectSystem(),
+  );
 
   updateStep2View(
     currentEval.progressText,
@@ -610,7 +648,18 @@ const runProgram = async () => {
     // 1. Authoritative Step-2 World Command Execution
     const result = worldCommandExecutor.execute(worldRobot, cmd);
 
-    currentEval = evaluateWorldMission(activeWorldMap, worldRobot);
+    // If objects were collected or interacted with, refresh mission objects in simulator visuals
+    if (result.interactions && result.interactions.length > 0) {
+      phaserSimulator?.updateMissionObjects(
+        worldCommandExecutor.getMissionObjectSystem().getObjects(),
+      );
+    }
+
+    currentEval = evaluateWorldMission(
+      activeWorldMap,
+      worldRobot,
+      worldCommandExecutor.getMissionObjectSystem(),
+    );
 
     if (!result.ok) {
       hadError = true;
@@ -765,7 +814,14 @@ const resetRobot = () => {
   updateControlButtons();
 
   worldCommandExecutor.getAdapter().resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
-  const initialEval = evaluateWorldMission(activeWorldMap, worldRobot);
+  worldCommandExecutor.getMissionObjectSystem().reset();
+  phaserSimulator?.updateMissionObjects(worldCommandExecutor.getMissionObjectSystem().getObjects());
+
+  const initialEval = evaluateWorldMission(
+    activeWorldMap,
+    worldRobot,
+    worldCommandExecutor.getMissionObjectSystem(),
+  );
 
   updateStep2View(
     initialEval.progressText,
@@ -936,5 +992,21 @@ if (typeof window !== 'undefined') {
   };
   (window as any).__step2GetMovementPolicy = () => {
     return worldCommandExecutor.getMovementPolicy();
+  };
+  (window as any).__step2GetMissionObjects = () => {
+    return worldCommandExecutor.getMissionObjectSystem().getObjects();
+  };
+  (window as any).__step2SetMissionObjects = (objects: any) => {
+    worldCommandExecutor.setMissionObjects(objects);
+    phaserSimulator?.updateMissionObjects(worldCommandExecutor.getMissionObjectSystem().getObjects());
+    return worldCommandExecutor.getMissionObjectSystem().getObjects();
+  };
+  (window as any).__step2ResetMissionObjects = () => {
+    worldCommandExecutor.getMissionObjectSystem().reset();
+    phaserSimulator?.updateMissionObjects(worldCommandExecutor.getMissionObjectSystem().getObjects());
+  };
+  (window as any).__step2SetMissionObjectDebug = (enabled: boolean) => {
+    phaserSimulator?.setDebugMissionObjectsOverlay(enabled);
+    return enabled;
   };
 }

@@ -109,6 +109,18 @@ export class PhaserSimulator {
     return this.scene ? this.scene.isDebugCollisionOverlayEnabled() : false;
   }
 
+  public setDebugMissionObjectsOverlay(enabled: boolean): void {
+    this.scene?.setDebugMissionObjectsOverlay(enabled);
+  }
+
+  public isDebugMissionObjectsOverlayEnabled(): boolean {
+    return this.scene ? this.scene.isDebugMissionObjectsOverlayEnabled() : false;
+  }
+
+  public updateMissionObjects(objects: import('./world').WorldMissionObject[]): void {
+    this.scene?.updateMissionObjects(objects);
+  }
+
   public getGame(): Phaser.Game | null {
     return this.game;
   }

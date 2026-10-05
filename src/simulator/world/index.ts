@@ -8,4 +8,6 @@ export * from './WorldCommandExecutor';
 export * from './WorldMissionEvaluator';
 export * from './WorldCollisionSystem';
 export * from './WorldMovementPolicy';
+export * from './WorldMissionObject';
+export * from './MissionObjectSystem';
 

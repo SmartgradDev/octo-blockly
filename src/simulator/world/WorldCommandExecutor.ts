@@ -24,6 +24,8 @@ import {
   MovementPolicyResult,
   WorldMovementPolicyEvaluator,
 } from './WorldMovementPolicy';
+import {WorldMissionObject, MissionObjectInteractionEvent} from './WorldMissionObject';
+import {MissionObjectSystem} from './MissionObjectSystem';
 
 export interface WorldMovementConfig {
   /**
@@ -95,6 +97,10 @@ export interface WorldCommandResult {
   collisionPoint?: Point2D;
   /** Ratio of path actually traveled (0..1) for scaling partial animation duration */
   partialTravelRatio?: number;
+  /** Mission object interaction events triggered during this command */
+  interactions?: MissionObjectInteractionEvent[];
+  /** Convenience list of object IDs collected/activated during this command */
+  collectedObjectIds?: string[];
 }
 
 export class WorldCommandExecutor {
@@ -103,6 +109,7 @@ export class WorldCommandExecutor {
   private adapter: WorldRobotAdapter;
   private collisionSystem: WorldCollisionSystem;
   private policyEvaluator: WorldMovementPolicyEvaluator;
+  private missionObjectSystem: MissionObjectSystem;
 
   constructor(
     worldBoundsOrMap: Size2D | WorldMapData,
@@ -110,6 +117,7 @@ export class WorldCommandExecutor {
     adapter?: WorldRobotAdapter,
     collisionSystem?: WorldCollisionSystem,
     policyEvaluator?: WorldMovementPolicyEvaluator,
+    missionObjectSystem?: MissionObjectSystem,
   ) {
     if ('bounds' in worldBoundsOrMap) {
       this.worldBounds = worldBoundsOrMap.bounds;
@@ -121,10 +129,14 @@ export class WorldCommandExecutor {
           worldBoundsOrMap,
           worldBoundsOrMap.movementPolicy || 'FREE_WORLD',
         );
+      this.missionObjectSystem =
+        missionObjectSystem ||
+        new MissionObjectSystem(worldBoundsOrMap.missionObjects || []);
     } else {
       this.worldBounds = worldBoundsOrMap;
       this.collisionSystem = collisionSystem || new WorldCollisionSystem();
       this.policyEvaluator = policyEvaluator || new WorldMovementPolicyEvaluator();
+      this.missionObjectSystem = missionObjectSystem || new MissionObjectSystem();
     }
 
     this.config = {...DEFAULT_WORLD_MOVEMENT_CONFIG, ...config};
@@ -156,6 +168,14 @@ export class WorldCommandExecutor {
     return this.policyEvaluator;
   }
 
+  public getMissionObjectSystem(): MissionObjectSystem {
+    return this.missionObjectSystem;
+  }
+
+  public setMissionObjects(objects: WorldMissionObject[]): void {
+    this.missionObjectSystem.loadObjects(objects);
+  }
+
   public setMovementPolicy(policy: WorldMovementPolicy | Partial<MovementPolicyConfig>): void {
     this.policyEvaluator.setPolicy(policy);
   }
@@ -166,6 +186,9 @@ export class WorldCommandExecutor {
     this.policyEvaluator.setWorldMap(map);
     if (map.movementPolicy) {
       this.policyEvaluator.setPolicy(map.movementPolicy);
+    }
+    if (map.missionObjects) {
+      this.missionObjectSystem.loadObjects(map.missionObjects);
     }
   }
 
@@ -253,6 +276,7 @@ export class WorldCommandExecutor {
 
         // 4. Earliest blocking condition priority resolution
         const tMin = Math.min(tBoundary, tCollision, tPolicy);
+        const robotRadius = this.collisionSystem.getRobotRadius();
 
         // Case A: Movement policy boundary breached earliest
         if (tPolicy === tMin && tPolicy < Infinity && !policyResult.allowed) {
@@ -276,6 +300,12 @@ export class WorldCommandExecutor {
             rotation: worldRobot.rotation,
           };
 
+          const interactions = this.missionObjectSystem.checkPathInteractions(
+            startPt,
+            currentPose,
+            robotRadius,
+          );
+
           return {
             ok: false,
             command,
@@ -287,6 +317,8 @@ export class WorldCommandExecutor {
             currentPose,
             collisionPoint: policyResult.violationPoint,
             partialTravelRatio: partialRatio,
+            interactions,
+            collectedObjectIds: interactions.map((ev) => ev.objectId),
           };
         }
 
@@ -313,6 +345,12 @@ export class WorldCommandExecutor {
             rotation: worldRobot.rotation,
           };
 
+          const interactions = this.missionObjectSystem.checkPathInteractions(
+            startPt,
+            currentPose,
+            robotRadius,
+          );
+
           return {
             ok: false,
             command,
@@ -324,12 +362,20 @@ export class WorldCommandExecutor {
             colliderType: colResult.collider.type.toUpperCase() as 'BUILDING' | 'TREE' | 'OBSTACLE',
             collisionPoint: colResult.collisionPoint,
             partialTravelRatio: partialRatio,
+            interactions,
+            collectedObjectIds: interactions.map((ev) => ev.objectId),
           };
         }
 
         // Case C: World boundary reached earliest
         if (tBoundary === tMin && tBoundary < Infinity) {
           worldRobot.state = 'stopped';
+          const interactions = this.missionObjectSystem.checkPathInteractions(
+            startPt,
+            previousPose,
+            robotRadius,
+          );
+
           return {
             ok: false,
             command,
@@ -337,10 +383,12 @@ export class WorldCommandExecutor {
             message: `Cannot move outside the world boundary (Target: X=${targetX.toFixed(1)}, Y=${targetY.toFixed(1)}).`,
             previousPose,
             currentPose: {...previousPose},
+            interactions,
+            collectedObjectIds: interactions.map((ev) => ev.objectId),
           };
         }
 
-        // Case C: Clear traversable path (open ground / grass / road)
+        // Case D: Clear traversable path (open ground / grass / road)
         this.adapter.setPose(worldRobot, targetX, targetY, worldRobot.rotation);
         worldRobot.state = 'moving';
 
@@ -350,6 +398,12 @@ export class WorldCommandExecutor {
           rotation: worldRobot.rotation,
         };
 
+        const interactions = this.missionObjectSystem.checkPathInteractions(
+          startPt,
+          currentPose,
+          robotRadius,
+        );
+
         return {
           ok: true,
           command,
@@ -358,6 +412,8 @@ export class WorldCommandExecutor {
           previousPose,
           currentPose,
           partialTravelRatio: 1,
+          interactions,
+          collectedObjectIds: interactions.map((ev) => ev.objectId),
         };
       }
 

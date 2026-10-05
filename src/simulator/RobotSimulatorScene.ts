@@ -115,6 +115,22 @@ export class RobotSimulatorScene extends Phaser.Scene {
     return this.worldRenderer ? this.worldRenderer.isDebugCollisionOverlayEnabled() : false;
   }
 
+  public setDebugMissionObjectsOverlay(enabled: boolean): void {
+    if (this.worldRenderer) {
+      this.worldRenderer.setDebugMissionObjectsOverlay(enabled);
+    }
+  }
+
+  public isDebugMissionObjectsOverlayEnabled(): boolean {
+    return this.worldRenderer ? this.worldRenderer.isDebugMissionObjectsOverlayEnabled() : false;
+  }
+
+  public updateMissionObjects(objects: import('./world').WorldMissionObject[]): void {
+    if (this.worldRenderer) {
+      this.worldRenderer.updateMissionObjects(objects);
+    }
+  }
+
   private updateCameraViewport(viewportWidth: number, viewportHeight: number): void {
     const {width: worldW, height: worldH} = this.currentWorldMap.bounds;
     

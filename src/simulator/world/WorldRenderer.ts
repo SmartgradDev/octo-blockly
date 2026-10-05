@@ -29,6 +29,7 @@ import {
   getIntersectionBoundingBox,
   isPointInIntersection,
 } from './WorldData';
+import {WorldMissionObject} from './WorldMissionObject';
 
 export class WorldRenderer {
   private scene: Phaser.Scene;
@@ -36,13 +37,17 @@ export class WorldRenderer {
   private roadGraphics: Phaser.GameObjects.Graphics;
   private buildingGraphics: Phaser.GameObjects.Graphics;
   private sceneryGraphics: Phaser.GameObjects.Graphics;
+  private missionObjectsGraphics: Phaser.GameObjects.Graphics;
   private objectiveGraphics: Phaser.GameObjects.Graphics;
   private debugRoadGraphics: Phaser.GameObjects.Graphics;
   private debugCollisionGraphics: Phaser.GameObjects.Graphics;
+  private debugMissionObjectsGraphics: Phaser.GameObjects.Graphics;
   private labelGroup: Phaser.GameObjects.Group;
   private debugRoadOverlay: boolean = false;
   private debugCollisionOverlay: boolean = false;
+  private debugMissionObjectsOverlay: boolean = false;
   private lastMap: WorldMapData | null = null;
+  private currentMissionObjects: WorldMissionObject[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -52,9 +57,11 @@ export class WorldRenderer {
     this.roadGraphics = scene.add.graphics().setDepth(30);
     this.buildingGraphics = scene.add.graphics().setDepth(40);
     this.sceneryGraphics = scene.add.graphics().setDepth(50);
+    this.missionObjectsGraphics = scene.add.graphics().setDepth(58);
     this.objectiveGraphics = scene.add.graphics().setDepth(60);
     this.debugRoadGraphics = scene.add.graphics().setDepth(70);
     this.debugCollisionGraphics = scene.add.graphics().setDepth(72);
+    this.debugMissionObjectsGraphics = scene.add.graphics().setDepth(74);
     this.labelGroup = scene.add.group();
   }
 
@@ -81,8 +88,30 @@ export class WorldRenderer {
     return this.debugCollisionOverlay;
   }
 
-  public render(map: WorldMapData): void {
+  public setDebugMissionObjectsOverlay(enabled: boolean): void {
+    this.debugMissionObjectsOverlay = enabled;
+    if (enabled) {
+      this.renderMissionObjectsDebugOverlay(this.currentMissionObjects);
+    } else {
+      this.debugMissionObjectsGraphics.clear();
+    }
+  }
+
+  public isDebugMissionObjectsOverlayEnabled(): boolean {
+    return this.debugMissionObjectsOverlay;
+  }
+
+  public updateMissionObjects(objects: WorldMissionObject[]): void {
+    this.currentMissionObjects = objects;
+    this.renderMissionObjects(objects);
+    if (this.debugMissionObjectsOverlay) {
+      this.renderMissionObjectsDebugOverlay(objects);
+    }
+  }
+
+  public render(map: WorldMapData, missionObjects?: WorldMissionObject[]): void {
     this.lastMap = map;
+    this.currentMissionObjects = missionObjects || map.missionObjects || [];
     this.clear();
 
     // 1. Base terrain ground
@@ -102,12 +131,20 @@ export class WorldRenderer {
     // 5. Trees with foliage canopies and shadow
     this.renderTrees(map.trees);
 
-    // 6. Mission objectives & goal markers
+    // 6. Interactive Mission Objects (gems, triggers, items)
+    this.renderMissionObjects(this.currentMissionObjects);
+
+    // 7. Mission objectives & goal markers
     this.renderObjectives(map.objectives);
 
-    // 7. Collision debug overlay (if enabled)
+    // 8. Collision debug overlay (if enabled)
     if (this.debugCollisionOverlay) {
       this.renderCollisionDebugOverlay(map);
+    }
+
+    // 9. Mission objects debug overlay (if enabled)
+    if (this.debugMissionObjectsOverlay) {
+      this.renderMissionObjectsDebugOverlay(this.currentMissionObjects);
     }
   }
 
@@ -473,14 +510,79 @@ export class WorldRenderer {
     }
   }
 
+  private renderMissionObjects(objects: WorldMissionObject[]): void {
+    this.missionObjectsGraphics.clear();
+    for (const obj of objects) {
+      // Do not render collected or hidden objects
+      if (obj.state === 'COLLECTED' || obj.state === 'INACTIVE' || obj.visible === false) {
+        continue;
+      }
+
+      const r = obj.interactionRadius ?? 16;
+      const color = obj.color ?? 0x38bdf8; // Gem cyan/sky blue by default
+
+      // 1. Soft pulsing glow aura underneath
+      this.missionObjectsGraphics.fillStyle(color, 0.25);
+      this.missionObjectsGraphics.fillCircle(obj.x, obj.y, r + 4);
+
+      // 2. Diamond faceted gem shape
+      this.missionObjectsGraphics.fillStyle(color, 0.95);
+      this.missionObjectsGraphics.beginPath();
+      this.missionObjectsGraphics.moveTo(obj.x, obj.y - r * 0.85); // Top
+      this.missionObjectsGraphics.lineTo(obj.x + r * 0.85, obj.y); // Right
+      this.missionObjectsGraphics.lineTo(obj.x, obj.y + r * 0.85); // Bottom
+      this.missionObjectsGraphics.lineTo(obj.x - r * 0.85, obj.y); // Left
+      this.missionObjectsGraphics.closePath();
+      this.missionObjectsGraphics.fillPath();
+
+      // Gem facet outline
+      this.missionObjectsGraphics.lineStyle(2, 0xffffff, 0.9);
+      this.missionObjectsGraphics.strokePath();
+
+      // 3. Inner sparkle facet
+      this.missionObjectsGraphics.fillStyle(0xffffff, 0.7);
+      this.missionObjectsGraphics.fillCircle(obj.x - r * 0.25, obj.y - r * 0.25, r * 0.25);
+
+      // 4. Optional emoji / icon symbol if provided
+      if (obj.iconSymbol) {
+        this.createText(obj.x, obj.y, obj.iconSymbol, 14, '#ffffff', true, 59);
+      }
+
+      // 5. Optional display label
+      if (obj.label) {
+        this.createText(obj.x, obj.y + r + 8, obj.label, 9, '#0369a1', true, 59);
+      }
+    }
+  }
+
+  private renderMissionObjectsDebugOverlay(objects: WorldMissionObject[]): void {
+    this.debugMissionObjectsGraphics.clear();
+    for (const obj of objects) {
+      if (obj.state === 'COLLECTED' || obj.state === 'INACTIVE') continue;
+
+      const r = obj.interactionRadius ?? 16;
+      // Interaction radius circle (cyan/teal dashed or semi-transparent)
+      this.debugMissionObjectsGraphics.fillStyle(0x06b6d4, 0.2);
+      this.debugMissionObjectsGraphics.fillCircle(obj.x, obj.y, r);
+      this.debugMissionObjectsGraphics.lineStyle(1.5, 0x0891b2, 0.9);
+      this.debugMissionObjectsGraphics.strokeCircle(obj.x, obj.y, r);
+
+      // Center crosshair
+      this.debugMissionObjectsGraphics.lineBetween(obj.x - 4, obj.y, obj.x + 4, obj.y);
+      this.debugMissionObjectsGraphics.lineBetween(obj.x, obj.y - 4, obj.x, obj.y + 4);
+    }
+  }
+
   public clear(): void {
     this.groundGraphics.clear();
     this.roadGraphics.clear();
     this.buildingGraphics.clear();
     this.sceneryGraphics.clear();
+    this.missionObjectsGraphics.clear();
     this.objectiveGraphics.clear();
     this.debugRoadGraphics.clear();
     this.debugCollisionGraphics.clear();
+    this.debugMissionObjectsGraphics.clear();
     this.labelGroup.clear(true, true);
   }
 
@@ -489,9 +591,11 @@ export class WorldRenderer {
     this.roadGraphics.destroy();
     this.buildingGraphics.destroy();
     this.sceneryGraphics.destroy();
+    this.missionObjectsGraphics.destroy();
     this.objectiveGraphics.destroy();
     this.debugRoadGraphics.destroy();
     this.debugCollisionGraphics.destroy();
+    this.debugMissionObjectsGraphics.destroy();
     this.labelGroup.destroy(true);
   }
 }

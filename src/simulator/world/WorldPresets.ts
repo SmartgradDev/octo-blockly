@@ -192,6 +192,32 @@ export const CAMPUS_TOWN_MAP: WorldMapData = {
     },
   ],
 
+  // Interactive Mission Objects (gems / collectibles along the route)
+  missionObjects: [
+    {
+      id: 'gem_campus_1',
+      type: 'COLLECTIBLE',
+      x: 250,
+      y: 300,
+      interactionRadius: 18,
+      state: 'AVAILABLE',
+      color: 0x38bdf8,
+      iconSymbol: '💎',
+      label: 'Gem A',
+    },
+    {
+      id: 'gem_campus_2',
+      type: 'COLLECTIBLE',
+      x: 510,
+      y: 300,
+      interactionRadius: 18,
+      state: 'AVAILABLE',
+      color: 0x38bdf8,
+      iconSymbol: '💎',
+      label: 'Gem B',
+    },
+  ],
+
   spawnPoint: {
     position: {x: 120, y: 300},    // Start on the west lane of Campus Way
     rotation: 0,                   // Heading East (+X)

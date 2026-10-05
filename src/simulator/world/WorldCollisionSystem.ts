@@ -80,6 +80,10 @@ export class WorldCollisionSystem {
     return this.config;
   }
 
+  public getRobotRadius(): number {
+    return this.config.robotRadius;
+  }
+
   public getColliders(): WorldCollider[] {
     return this.colliders;
   }
