@@ -53,6 +53,18 @@ export class RobotSimulatorScene extends Phaser.Scene {
     }
   }
 
+  public pauseVisuals(): void {
+    this.gridRenderer?.pauseVisuals();
+  }
+
+  public resumeVisuals(): void {
+    this.gridRenderer?.resumeVisuals();
+  }
+
+  public stopVisuals(snapToTarget: boolean = true): void {
+    this.gridRenderer?.stopVisuals(snapToTarget);
+  }
+
   private handleResize(_gameSize: Phaser.Structs.Size): void {
     const {width} = this.scale;
     if (this.headerTitle) {

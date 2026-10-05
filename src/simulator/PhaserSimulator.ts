@@ -69,6 +69,18 @@ export class PhaserSimulator {
     }
   }
 
+  public pauseVisuals(): void {
+    this.scene?.pauseVisuals();
+  }
+
+  public resumeVisuals(): void {
+    this.scene?.resumeVisuals();
+  }
+
+  public stopVisuals(snapToTarget: boolean = true): void {
+    this.scene?.stopVisuals(snapToTarget);
+  }
+
   public getGame(): Phaser.Game | null {
     return this.game;
   }

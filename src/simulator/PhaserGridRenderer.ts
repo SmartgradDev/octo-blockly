@@ -22,6 +22,7 @@ export interface GridRenderData {
   lines?: Position[];
   items?: Position[];
   collectedItems?: Position[];
+  immediate?: boolean;
 }
 
 export class PhaserGridRenderer implements GridCoordinateConverter {
@@ -193,7 +194,7 @@ export class PhaserGridRenderer implements GridCoordinateConverter {
 
     // 5. Delegate robot rendering to the dedicated RobotRenderer
     this.robotRenderer.setCoordinateConverter(this);
-    this.robotRenderer.render(robot);
+    this.robotRenderer.render(robot, data.immediate || false);
   }
 
   private createText(
@@ -211,6 +212,18 @@ export class PhaserGridRenderer implements GridCoordinateConverter {
     txt.setOrigin(0.5, 0.5);
     this.textGroup.add(txt);
     return txt;
+  }
+
+  public pauseVisuals(): void {
+    this.robotRenderer.pauseVisuals();
+  }
+
+  public resumeVisuals(): void {
+    this.robotRenderer.resumeVisuals();
+  }
+
+  public stopVisuals(snapToTarget: boolean = true): void {
+    this.robotRenderer.stopVisuals(snapToTarget);
   }
 
   public destroy(): void {

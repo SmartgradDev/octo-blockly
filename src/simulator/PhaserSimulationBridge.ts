@@ -32,6 +32,7 @@ export interface BridgeStatePayload {
   mission: Mission;
   collectedItems?: Position[];
   progressText?: string;
+  immediate?: boolean;
 }
 
 export class PhaserSimulationBridge {
@@ -46,7 +47,7 @@ export class PhaserSimulationBridge {
    * Maps authoritative Robot Engine state directly to Phaser visual state.
    */
   public onStateChange(payload: BridgeStatePayload): void {
-    const {grid, robot, mission, collectedItems} = payload;
+    const {grid, robot, mission, collectedItems, immediate} = payload;
 
     const renderData: GridRenderData = {
       grid,
@@ -57,6 +58,7 @@ export class PhaserSimulationBridge {
       lines: mission.lines,
       items: mission.items,
       collectedItems: collectedItems || [],
+      immediate: immediate || false,
     };
 
     this.simulator.updateState(renderData);
@@ -64,9 +66,32 @@ export class PhaserSimulationBridge {
 
   /**
    * Explicit bridge handler for simulation reset events.
+   * Forces immediate snapping without tweening.
    */
   public onReset(payload: BridgeStatePayload): void {
-    this.onStateChange(payload);
+    this.simulator.stopVisuals(false);
+    this.onStateChange({...payload, immediate: true});
+  }
+
+  /**
+   * Explicit bridge handler for pausing execution.
+   */
+  public onPause(): void {
+    this.simulator.pauseVisuals();
+  }
+
+  /**
+   * Explicit bridge handler for resuming execution.
+   */
+  public onResume(): void {
+    this.simulator.resumeVisuals();
+  }
+
+  /**
+   * Explicit bridge handler for stopping execution.
+   */
+  public onStop(snapToTarget: boolean = true): void {
+    this.simulator.stopVisuals(snapToTarget);
   }
 
   /**

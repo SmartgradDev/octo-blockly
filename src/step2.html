@@ -31,11 +31,17 @@
         <button id="topCodeBtn" class="top-action-btn btn-ghost" title="Toggle Code Inspector">
           <span class="btn-icon">&lt;/&gt;</span> <span>Code</span>
         </button>
+        <button id="runBtn" class="top-action-btn btn-primary" title="Execute Blockly Program">
+          <span class="btn-icon">▶</span> <span id="runBtnText">Run</span>
+        </button>
+        <button id="pauseBtn" class="top-action-btn btn-secondary" style="display: none;" title="Pause Execution">
+          <span class="btn-icon">⏸</span> <span>Pause</span>
+        </button>
+        <button id="stopBtn" class="top-action-btn btn-secondary" style="display: none;" title="Stop Execution">
+          <span class="btn-icon">⏹</span> <span>Stop</span>
+        </button>
         <button id="resetBtn" class="top-action-btn btn-secondary" title="Reset Robot to Start">
           <span class="btn-icon">↺</span> <span>Reset</span>
-        </button>
-        <button id="runBtn" class="top-action-btn btn-primary" title="Execute Blockly Program">
-          <span class="btn-icon">▶</span> <span id="runBtnText">Run Program</span>
         </button>
         <button id="nextMissionBtn" class="top-action-btn btn-success" style="display: none;" title="Go to Next Mission">
           <span>Next Mission</span> <span class="btn-icon">➔</span>
@@ -108,7 +114,13 @@
         <!-- Simulator Quick Controls -->
         <div class="sidebar-card controls-card" id="controlsPane">
           <button id="sidebarRunBtn" class="sidebar-action-btn btn-run">
-            <span class="btn-icon">▶</span> <span class="sidebar-run-text">Run Program</span>
+            <span class="btn-icon">▶</span> <span class="sidebar-run-text">Run</span>
+          </button>
+          <button id="sidebarPauseBtn" class="sidebar-action-btn btn-secondary" style="display: none;">
+            <span class="btn-icon">⏸</span> <span>Pause</span>
+          </button>
+          <button id="sidebarStopBtn" class="sidebar-action-btn btn-secondary" style="display: none;">
+            <span class="btn-icon">⏹</span> <span>Stop</span>
           </button>
           <button id="sidebarResetBtn" class="sidebar-action-btn btn-reset">
             <span class="btn-icon">↺</span> <span>Reset</span>

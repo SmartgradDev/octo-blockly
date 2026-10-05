@@ -137,6 +137,7 @@ function directionArrow(dir: Direction): string {
 function updateStep2View(
   currentCollectedItems: Position[] = [],
   progressText?: string,
+  immediate: boolean = false,
 ): void {
   // 1. Phaser Simulation Bridge (Robot Engine -> Bridge -> Phaser Visual State)
   if (simulationBridge) {
@@ -146,6 +147,7 @@ function updateStep2View(
       mission: currentMission,
       collectedItems: currentCollectedItems,
       progressText,
+      immediate,
     });
   }
 
@@ -212,9 +214,91 @@ function setStatus(text: string, type: '' | 'error' | 'success' = '') {
 
 // ── Execution state & helpers ───────────────────────────────────────
 let isRunning = false;
+let isPaused = false;
 let stopRequested = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Updates button visibility and active styles across the top bar and sidebar.
+ */
+function updateControlButtons(): void {
+  const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
+  const sidebarRunBtn = document.getElementById('sidebarRunBtn') as HTMLButtonElement | null;
+  const runBtnText = document.getElementById('runBtnText');
+  const sidebarRunText = document.querySelector('.sidebar-run-text');
+
+  const pauseBtn = document.getElementById('pauseBtn') as HTMLButtonElement | null;
+  const sidebarPauseBtn = document.getElementById('sidebarPauseBtn') as HTMLButtonElement | null;
+  const stopBtn = document.getElementById('stopBtn') as HTMLButtonElement | null;
+  const sidebarStopBtn = document.getElementById('sidebarStopBtn') as HTMLButtonElement | null;
+
+  if (isRunning) {
+    if (isPaused) {
+      // Paused state: show Resume on runBtn, toggle pauseBtn label
+      if (runBtn) {
+        runBtn.disabled = false;
+        runBtn.classList.remove('is-running');
+      }
+      if (sidebarRunBtn) {
+        sidebarRunBtn.disabled = false;
+        sidebarRunBtn.classList.remove('is-running');
+      }
+      if (runBtnText) runBtnText.textContent = 'Resume';
+      if (sidebarRunText) sidebarRunText.textContent = 'Resume';
+
+      if (pauseBtn) {
+        pauseBtn.style.display = 'inline-flex';
+        pauseBtn.innerHTML = '<span class="btn-icon">▶</span> <span>Resume</span>';
+      }
+      if (sidebarPauseBtn) {
+        sidebarPauseBtn.style.display = 'inline-flex';
+        sidebarPauseBtn.innerHTML = '<span class="btn-icon">▶</span> <span>Resume</span>';
+      }
+    } else {
+      // Running state: run button disabled, pause and stop buttons visible
+      if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.classList.add('is-running');
+      }
+      if (sidebarRunBtn) {
+        sidebarRunBtn.disabled = true;
+        sidebarRunBtn.classList.add('is-running');
+      }
+      if (runBtnText) runBtnText.textContent = 'Running...';
+      if (sidebarRunText) sidebarRunText.textContent = 'Running...';
+
+      if (pauseBtn) {
+        pauseBtn.style.display = 'inline-flex';
+        pauseBtn.innerHTML = '<span class="btn-icon">⏸</span> <span>Pause</span>';
+      }
+      if (sidebarPauseBtn) {
+        sidebarPauseBtn.style.display = 'inline-flex';
+        sidebarPauseBtn.innerHTML = '<span class="btn-icon">⏸</span> <span>Pause</span>';
+      }
+    }
+
+    if (stopBtn) stopBtn.style.display = 'inline-flex';
+    if (sidebarStopBtn) sidebarStopBtn.style.display = 'inline-flex';
+  } else {
+    // Idle / Stopped state
+    if (runBtn) {
+      runBtn.disabled = false;
+      runBtn.classList.remove('is-running');
+    }
+    if (sidebarRunBtn) {
+      sidebarRunBtn.disabled = false;
+      sidebarRunBtn.classList.remove('is-running');
+    }
+    if (runBtnText) runBtnText.textContent = 'Run';
+    if (sidebarRunText) sidebarRunText.textContent = 'Run';
+
+    if (pauseBtn) pauseBtn.style.display = 'none';
+    if (sidebarPauseBtn) sidebarPauseBtn.style.display = 'none';
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (sidebarStopBtn) sidebarStopBtn.style.display = 'none';
+  }
+}
 
 // ── Helper: Load & switch mission ───────────────────────────────────
 const loadMission = (mission: Mission) => {
@@ -291,6 +375,7 @@ const loadMission = (mission: Mission) => {
   updateStep2View(
     initialRuntimeState.collectedItems,
     initialEval.progressText,
+    true,
   );
 
   const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
@@ -348,30 +433,66 @@ if (missionSelect) {
   });
 }
 
-// ── Run Program Execution ───────────────────────────────────────────
-const runProgram = async () => {
-  if (isRunning) return;
+// ── Run / Pause / Resume / Stop Controls ─────────────────────────────
 
-  const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
-  const sidebarRunBtn = document.getElementById('sidebarRunBtn') as HTMLButtonElement | null;
-  const runBtnText = document.getElementById('runBtnText');
-  const sidebarRunText = document.querySelector('.sidebar-run-text');
+// Shared execution session state across pause/resume
+let activeInterpreter: ProgramInterpreter | null = null;
+let activeRuntimeState: MissionRuntimeState | null = null;
+let activeStartTime: number = 0;
+let accumulatedExecutionTime: number = 0;
+let lastStepTime: number = 0;
+
+const pauseProgram = () => {
+  if (!isRunning || isPaused) return;
+  isPaused = true;
+  accumulatedExecutionTime += performance.now() - lastStepTime;
+  simulationBridge?.onPause();
+  updateControlButtons();
+  setStatus('Simulation paused. Click Resume or ▶ to continue.');
+};
+
+const resumeProgram = () => {
+  if (!isRunning || !isPaused) return;
+  isPaused = false;
+  lastStepTime = performance.now();
+  simulationBridge?.onResume();
+  updateControlButtons();
+  setStatus('Resuming execution in Phaser 4...');
+};
+
+const stopProgram = () => {
+  if (!isRunning) return;
+  stopRequested = true;
+  isPaused = false;
+  isRunning = false;
+  activeInterpreter = null;
+  activeRuntimeState = null;
+  simulationBridge?.onStop(true);
+  updateControlButtons();
+  setStatus('Execution stopped.', 'error');
+};
+
+const runProgram = async () => {
+  if (isRunning) {
+    if (isPaused) {
+      resumeProgram();
+    }
+    return;
+  }
+
+  // Check if workspace has blocks
+  const allBlocks = ws.getAllBlocks(false);
+  if (allBlocks.length === 0) {
+    setStatus('No robot commands found. Drag some blocks!');
+    return;
+  }
 
   isRunning = true;
+  isPaused = false;
   stopRequested = false;
+  updateControlButtons();
 
-  if (runBtn) {
-    runBtn.disabled = true;
-    runBtn.classList.add('is-running');
-  }
-  if (sidebarRunBtn) {
-    sidebarRunBtn.disabled = true;
-    sidebarRunBtn.classList.add('is-running');
-  }
-  if (runBtnText) runBtnText.textContent = 'Running...';
-  if (sidebarRunText) sidebarRunText.textContent = 'Running...';
-
-  // Restore starting state
+  // Restore starting state for fresh run
   robot.x = currentMission.start.x;
   robot.y = currentMission.start.y;
   robot.direction = currentMission.start.direction;
@@ -385,7 +506,7 @@ const runProgram = async () => {
       ? Math.max(0, currentMission.initialBattery)
       : undefined;
 
-  const runtimeState: MissionRuntimeState = {
+  activeRuntimeState = {
     collectedItems: [],
     visitedColors: new Set(),
     executedActions: 0,
@@ -393,15 +514,16 @@ const runProgram = async () => {
   };
 
   const checkCellVisit = () => {
+    if (!activeRuntimeState) return;
     if (currentMission.items) {
       const foundItem = currentMission.items.find(
         (it) =>
           it.x === robot.x &&
           it.y === robot.y &&
-          !runtimeState.collectedItems.some((ci) => ci.x === it.x && ci.y === it.y),
+          !activeRuntimeState!.collectedItems.some((ci) => ci.x === it.x && ci.y === it.y),
       );
       if (foundItem) {
-        runtimeState.collectedItems.push({x: foundItem.x, y: foundItem.y});
+        activeRuntimeState.collectedItems.push({x: foundItem.x, y: foundItem.y});
       }
     }
 
@@ -410,20 +532,21 @@ const runProgram = async () => {
         (c) => c.x === robot.x && c.y === robot.y,
       );
       if (colorCell) {
-        runtimeState.visitedColors.add(colorCell.color);
+        activeRuntimeState.visitedColors.add(colorCell.color);
       }
     }
   };
 
   checkCellVisit();
-  let currentEval = evaluateMission(currentMission, robot, runtimeState);
+  let currentEval = evaluateMission(currentMission, robot, activeRuntimeState);
 
   updateStep2View(
-    runtimeState.collectedItems,
+    activeRuntimeState.collectedItems,
     currentEval.progressText,
+    true,
   );
 
-  const interpreter = new ProgramInterpreter(
+  activeInterpreter = new ProgramInterpreter(
     ws as Blockly.Workspace,
     robot,
     grid,
@@ -434,16 +557,26 @@ const runProgram = async () => {
 
   setStatus('Starting execution in Phaser 4...');
 
-  const startTime = performance.now();
+  activeStartTime = performance.now();
+  lastStepTime = activeStartTime;
+  accumulatedExecutionTime = 0;
   let hadError = false;
 
-  while (!interpreter.isDone()) {
+  while (activeInterpreter && !activeInterpreter.isDone()) {
     if (stopRequested) {
-      setStatus('Execution stopped.', 'error');
       break;
     }
 
-    const stepResult = interpreter.step();
+    // While paused, wait safely without consuming CPU or advancing interpreter
+    while (isPaused && !stopRequested) {
+      await delay(50);
+    }
+
+    if (stopRequested) {
+      break;
+    }
+
+    const stepResult = activeInterpreter.step();
 
     if (stepResult.limitExceeded) {
       hadError = true;
@@ -460,7 +593,7 @@ const runProgram = async () => {
     }
 
     const cmd = stepResult.command;
-    const executedCount = interpreter.getExecutedCommandCount();
+    const executedCount = activeInterpreter.getExecutedCommandCount();
 
     const result = executeCommand(
       robot,
@@ -469,16 +602,16 @@ const runProgram = async () => {
       currentMission.obstacles,
     );
 
-    runtimeState.executedActions = executedCount;
+    activeRuntimeState.executedActions = executedCount;
     if (!result.ok && result.message.includes('Battery depleted')) {
-      runtimeState.batteryDepleted = true;
+      activeRuntimeState.batteryDepleted = true;
     }
 
     checkCellVisit();
-    currentEval = evaluateMission(currentMission, robot, runtimeState);
+    currentEval = evaluateMission(currentMission, robot, activeRuntimeState);
 
     updateStep2View(
-      runtimeState.collectedItems,
+      activeRuntimeState.collectedItems,
       currentEval.progressText,
     );
 
@@ -498,14 +631,15 @@ const runProgram = async () => {
     }
 
     if (currentEval.completed) {
-      const elapsedTimeMs = performance.now() - startTime;
+      const totalTimeMs =
+        accumulatedExecutionTime + (performance.now() - lastStepTime);
       const blockCount = ws.getAllBlocks(false).length;
 
       const scoreResult = calculateScore({
         completed: true,
         executedActionCount: executedCount,
         blockCount: blockCount,
-        timeMs: elapsedTimeMs,
+        timeMs: totalTimeMs,
         optimalActionCount: currentMission.optimalCommandCount,
       });
 
@@ -545,7 +679,7 @@ const runProgram = async () => {
     await delay(stepDelay);
   }
 
-  const totalExecuted = interpreter.getExecutedCommandCount();
+  const totalExecuted = activeInterpreter ? activeInterpreter.getExecutedCommandCount() : 0;
 
   if (totalExecuted === 0 && !hadError && !stopRequested) {
     setStatus('No robot commands found. Drag some blocks!');
@@ -556,42 +690,27 @@ const runProgram = async () => {
   }
 
   isRunning = false;
-  if (runBtn) {
-    runBtn.disabled = false;
-    runBtn.classList.remove('is-running');
-  }
-  if (sidebarRunBtn) {
-    sidebarRunBtn.disabled = false;
-    sidebarRunBtn.classList.remove('is-running');
-  }
-  if (runBtnText) runBtnText.textContent = 'Run Program';
-  if (sidebarRunText) sidebarRunText.textContent = 'Run Program';
+  isPaused = false;
+  activeInterpreter = null;
+  activeRuntimeState = null;
+  updateControlButtons();
 };
 
 const resetRobot = () => {
   stopRequested = true;
+  isPaused = false;
   isRunning = false;
+  activeInterpreter = null;
+  activeRuntimeState = null;
+
+  simulationBridge?.onStop(false);
 
   const nextMissionBtn = document.getElementById('nextMissionBtn');
   const sidebarNextBtn = document.getElementById('sidebarNextBtn');
   if (nextMissionBtn) nextMissionBtn.style.display = 'none';
   if (sidebarNextBtn) sidebarNextBtn.style.display = 'none';
 
-  const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
-  const sidebarRunBtn = document.getElementById('sidebarRunBtn') as HTMLButtonElement | null;
-  const runBtnText = document.getElementById('runBtnText');
-  const sidebarRunText = document.querySelector('.sidebar-run-text');
-
-  if (runBtn) {
-    runBtn.disabled = false;
-    runBtn.classList.remove('is-running');
-  }
-  if (sidebarRunBtn) {
-    sidebarRunBtn.disabled = false;
-    sidebarRunBtn.classList.remove('is-running');
-  }
-  if (runBtnText) runBtnText.textContent = 'Run Program';
-  if (sidebarRunText) sidebarRunText.textContent = 'Run Program';
+  updateControlButtons();
 
   robot.x = currentMission.start.x;
   robot.y = currentMission.start.y;
@@ -618,6 +737,7 @@ const resetRobot = () => {
   updateStep2View(
     resetRuntimeState.collectedItems,
     initialEval.progressText,
+    true,
   );
 
   const best = getBestScore(currentMission.id);
@@ -654,6 +774,22 @@ const handleNextMission = () => {
 // Wire up event listeners
 document.getElementById('runBtn')?.addEventListener('click', runProgram);
 document.getElementById('sidebarRunBtn')?.addEventListener('click', runProgram);
+document.getElementById('pauseBtn')?.addEventListener('click', () => {
+  if (isPaused) {
+    resumeProgram();
+  } else {
+    pauseProgram();
+  }
+});
+document.getElementById('sidebarPauseBtn')?.addEventListener('click', () => {
+  if (isPaused) {
+    resumeProgram();
+  } else {
+    pauseProgram();
+  }
+});
+document.getElementById('stopBtn')?.addEventListener('click', stopProgram);
+document.getElementById('sidebarStopBtn')?.addEventListener('click', stopProgram);
 document.getElementById('resetBtn')?.addEventListener('click', resetRobot);
 document.getElementById('sidebarResetBtn')?.addEventListener('click', resetRobot);
 document.getElementById('nextMissionBtn')?.addEventListener('click', handleNextMission);
