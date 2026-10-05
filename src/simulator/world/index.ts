@@ -1,4 +1,5 @@
 export * from './WorldData';
+export * from './RoadData';
 export * from './WorldPresets';
 export * from './WorldRenderer';
 export * from './WorldRobotState';

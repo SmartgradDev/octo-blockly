@@ -882,4 +882,10 @@ if (typeof window !== 'undefined') {
   };
   (window as any).__step2GetWorldRobot = () => ({...worldRobot});
   (window as any).__step2GetVisualPose = () => simulationBridge?.getVisualPose() || null;
+  (window as any).__step2GetRoads = () => activeWorldMap.roads;
+  (window as any).__step2GetIntersections = () => activeWorldMap.intersections || [];
+  (window as any).__step2SetRoadDebug = (enabled: boolean) => {
+    phaserSimulator?.setDebugRoadOverlay(enabled);
+    return enabled;
+  };
 }

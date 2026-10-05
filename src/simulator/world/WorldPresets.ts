@@ -23,44 +23,45 @@ export const CAMPUS_TOWN_MAP: WorldMapData = {
   },
   groundColor: 0x86efac, // Vibrant campus lawn green
 
-  // Roads & Intersection
+  // Roads: Structured continuous centerlines, explicit widths, and topology
   roads: [
-    // Main horizontal road across middle
+    // Main horizontal boulevard across middle (centerline Y = 300)
     {
-      id: 'road_main_horiz',
+      id: 'campus-way',
       name: 'Campus Way',
-      type: 'HORIZONTAL',
-      x: 0,
-      y: 260,
-      width: 800,
-      height: 80,
+      type: 'main-road',
+      start: {x: 0, y: 300},
+      end: {x: 800, y: 300},
+      width: 80,
       hasSidewalk: true,
       sidewalkWidth: 10,
       dashedLaneMarking: true,
+      connectedIntersectionIds: ['campus-square-crossing'],
     },
-    // Vertical avenue crossing through
+    // Vertical avenue crossing through (centerline X = 400)
     {
-      id: 'road_avenue_vert',
+      id: 'octo-boulevard',
       name: 'Octo Boulevard',
-      type: 'VERTICAL',
-      x: 360,
-      y: 0,
+      type: 'avenue',
+      start: {x: 400, y: 0},
+      end: {x: 400, y: 600},
       width: 80,
-      height: 600,
       hasSidewalk: true,
       sidewalkWidth: 10,
       dashedLaneMarking: true,
+      connectedIntersectionIds: ['campus-square-crossing'],
     },
-    // Central junction intersection
+  ],
+
+  // Intersections: Explicit topological junction data connecting roads
+  intersections: [
     {
-      id: 'road_junction',
+      id: 'campus-square-crossing',
       name: 'Campus Square Crossing',
-      type: 'INTERSECTION',
-      x: 360,
-      y: 260,
+      center: {x: 400, y: 300},
       width: 80,
       height: 80,
-      hasSidewalk: false,
+      connectedRoadIds: ['campus-way', 'octo-boulevard'],
     },
   ],
 

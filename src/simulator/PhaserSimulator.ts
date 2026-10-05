@@ -93,6 +93,14 @@ export class PhaserSimulator {
     this.scene?.stopVisuals(snapToTarget);
   }
 
+  public setDebugRoadOverlay(enabled: boolean): void {
+    this.scene?.setDebugRoadOverlay(enabled);
+  }
+
+  public isDebugRoadOverlayEnabled(): boolean {
+    return this.scene ? this.scene.isDebugRoadOverlayEnabled() : false;
+  }
+
   public getGame(): Phaser.Game | null {
     return this.game;
   }

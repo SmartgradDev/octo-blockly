@@ -18,6 +18,12 @@ export interface Size2D {
 
 export interface BoundingBox2D extends Point2D, Size2D {}
 
+export * from './RoadData';
+import {WorldRoad, WorldIntersection} from './RoadData';
+
+/**
+ * Legacy road segment format (retained for backward compatibility).
+ */
 export interface RoadSegment {
   id: string;
   name?: string;
@@ -89,7 +95,8 @@ export interface WorldMapData {
   description: string;
   bounds: Size2D;             // World total dimensions in world units (e.g. 800 x 600)
   groundColor: number;        // Primary terrain ground (e.g. grass green)
-  roads: RoadSegment[];
+  roads: WorldRoad[];
+  intersections?: WorldIntersection[];
   crosswalks?: CrosswalkData[];
   buildings: WorldBuilding[];
   trees: WorldTree[];

@@ -17,12 +17,17 @@
 import * as Phaser from 'phaser';
 import {
   WorldMapData,
-  RoadSegment,
+  WorldRoad,
+  WorldIntersection,
   CrosswalkData,
   WorldBuilding,
   WorldTree,
   ParkZone,
   WorldObjectiveTarget,
+  getRoadBoundingBox,
+  getRoadOrientation,
+  getIntersectionBoundingBox,
+  isPointInIntersection,
 } from './WorldData';
 
 export class WorldRenderer {
@@ -32,7 +37,9 @@ export class WorldRenderer {
   private buildingGraphics: Phaser.GameObjects.Graphics;
   private sceneryGraphics: Phaser.GameObjects.Graphics;
   private objectiveGraphics: Phaser.GameObjects.Graphics;
+  private debugRoadGraphics: Phaser.GameObjects.Graphics;
   private labelGroup: Phaser.GameObjects.Group;
+  private debugRoadOverlay: boolean = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -43,7 +50,16 @@ export class WorldRenderer {
     this.buildingGraphics = scene.add.graphics().setDepth(40);
     this.sceneryGraphics = scene.add.graphics().setDepth(50);
     this.objectiveGraphics = scene.add.graphics().setDepth(60);
+    this.debugRoadGraphics = scene.add.graphics().setDepth(70);
     this.labelGroup = scene.add.group();
+  }
+
+  public setDebugRoadOverlay(enabled: boolean): void {
+    this.debugRoadOverlay = enabled;
+  }
+
+  public isDebugRoadOverlayEnabled(): boolean {
+    return this.debugRoadOverlay;
   }
 
   /**
@@ -60,8 +76,8 @@ export class WorldRenderer {
       this.renderParks(map.parks);
     }
 
-    // 3. Roads, sidewalks, lane dashes & crosswalks
-    this.renderRoads(map.roads, map.crosswalks);
+    // 3. Structured roads, sidewalks, intersections, lane dashes & crosswalks
+    this.renderRoads(map.roads, map.intersections, map.crosswalks);
 
     // 4. 2.5D Buildings with roofs, shadow and windows
     this.renderBuildings(map.buildings);
@@ -115,15 +131,23 @@ export class WorldRenderer {
     }
   }
 
-  private renderRoads(roads: RoadSegment[], crosswalks?: CrosswalkData[]): void {
-    // A. Draw sidewalks (lighter concrete under roads)
+  private renderRoads(
+    roads: WorldRoad[],
+    intersections?: WorldIntersection[],
+    crosswalks?: CrosswalkData[],
+  ): void {
+    const interList = intersections || [];
+
+    // A. Draw sidewalks (lighter concrete bordering roads)
     for (const road of roads) {
       if (road.hasSidewalk) {
+        const bounds = getRoadBoundingBox(road);
         const sw = road.sidewalkWidth || 10;
-        const sx = road.type === 'VERTICAL' ? road.x - sw : road.x;
-        const sy = road.type === 'HORIZONTAL' ? road.y - sw : road.y;
-        const swidth = road.type === 'VERTICAL' ? road.width + sw * 2 : road.width;
-        const sheight = road.type === 'HORIZONTAL' ? road.height + sw * 2 : road.height;
+        const orientation = getRoadOrientation(road);
+        const sx = orientation === 'VERTICAL' ? bounds.x - sw : bounds.x;
+        const sy = orientation === 'HORIZONTAL' ? bounds.y - sw : bounds.y;
+        const swidth = orientation === 'VERTICAL' ? bounds.width + sw * 2 : bounds.width;
+        const sheight = orientation === 'HORIZONTAL' ? bounds.height + sw * 2 : bounds.height;
 
         this.roadGraphics.fillStyle(0xd1d5db, 1); // Concrete sidewalk gray
         this.roadGraphics.fillRect(sx, sy, swidth, sheight);
@@ -132,38 +156,66 @@ export class WorldRenderer {
       }
     }
 
-    // B. Draw dark asphalt road surface
+    // B. Draw dark asphalt road surfaces
     for (const road of roads) {
+      const bounds = getRoadBoundingBox(road);
       this.roadGraphics.fillStyle(0x334155, 1); // Dark slate asphalt
-      this.roadGraphics.fillRect(road.x, road.y, road.width, road.height);
+      this.roadGraphics.fillRect(bounds.x, bounds.y, bounds.width, bounds.height);
 
       // Asphalt curbs
       this.roadGraphics.lineStyle(1.5, 0x1e293b, 1);
-      this.roadGraphics.strokeRect(road.x, road.y, road.width, road.height);
+      this.roadGraphics.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+    }
 
-      // Dashed centerline markings
+    // C. Draw intersection junction pavements
+    for (const inter of interList) {
+      const ibox = getIntersectionBoundingBox(inter);
+      this.roadGraphics.fillStyle(0x334155, 1); // Dark slate asphalt
+      this.roadGraphics.fillRect(ibox.x, ibox.y, ibox.width, ibox.height);
+
+      this.roadGraphics.lineStyle(1.5, 0x1e293b, 1);
+      this.roadGraphics.strokeRect(ibox.x, ibox.y, ibox.width, ibox.height);
+    }
+
+    // D. Dashed centerline markings (safety yellow)
+    for (const road of roads) {
       if (road.dashedLaneMarking) {
-        this.roadGraphics.fillStyle(0xfde047, 1); // Safety yellow dashed line
+        this.roadGraphics.fillStyle(0xfde047, 1); // Safety yellow
+        const orientation = getRoadOrientation(road);
+        const dashLength = 18;
+        const gapLength = 14;
 
-        if (road.type === 'HORIZONTAL') {
-          const centerY = road.y + road.height / 2;
-          const dashLength = 18;
-          const gapLength = 14;
-          for (let x = road.x + 8; x < road.x + road.width - 8; x += dashLength + gapLength) {
-            this.roadGraphics.fillRect(x, centerY - 1.5, dashLength, 3);
+        if (orientation === 'HORIZONTAL') {
+          const centerY = road.start.y;
+          const minX = Math.min(road.start.x, road.end.x);
+          const maxX = Math.max(road.start.x, road.end.x);
+
+          for (let x = minX + 8; x < maxX - 8; x += dashLength + gapLength) {
+            const inIntersection = interList.some((it) =>
+              isPointInIntersection({x: x + dashLength / 2, y: centerY}, it),
+            );
+            if (!inIntersection) {
+              this.roadGraphics.fillRect(x, centerY - 1.5, dashLength, 3);
+            }
           }
-        } else if (road.type === 'VERTICAL') {
-          const centerX = road.x + road.width / 2;
-          const dashLength = 18;
-          const gapLength = 14;
-          for (let y = road.y + 8; y < road.y + road.height - 8; y += dashLength + gapLength) {
-            this.roadGraphics.fillRect(centerX - 1.5, y, 3, dashLength);
+        } else if (orientation === 'VERTICAL') {
+          const centerX = road.start.x;
+          const minY = Math.min(road.start.y, road.end.y);
+          const maxY = Math.max(road.start.y, road.end.y);
+
+          for (let y = minY + 8; y < maxY - 8; y += dashLength + gapLength) {
+            const inIntersection = interList.some((it) =>
+              isPointInIntersection({x: centerX, y: y + dashLength / 2}, it),
+            );
+            if (!inIntersection) {
+              this.roadGraphics.fillRect(centerX - 1.5, y, 3, dashLength);
+            }
           }
         }
       }
     }
 
-    // C. Crosswalk white stripes at intersections
+    // E. Crosswalk white stripes at intersections
     if (crosswalks) {
       this.roadGraphics.fillStyle(0xffffff, 0.95);
       for (const cw of crosswalks) {
@@ -181,6 +233,54 @@ export class WorldRenderer {
           }
         }
       }
+    }
+
+    // F. Debug road overlay visualization
+    if (this.debugRoadOverlay) {
+      this.renderRoadDebugOverlay(roads, interList);
+    }
+  }
+
+  private renderRoadDebugOverlay(roads: WorldRoad[], intersections: WorldIntersection[]): void {
+    this.debugRoadGraphics.clear();
+
+    // Road centerlines (cyan) and boundaries (magenta)
+    for (const road of roads) {
+      const bounds = getRoadBoundingBox(road);
+
+      // Magenta boundary stroke
+      this.debugRoadGraphics.lineStyle(1, 0xff00ff, 0.7);
+      this.debugRoadGraphics.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
+
+      // Cyan centerline
+      this.debugRoadGraphics.lineStyle(2, 0x06b6d4, 0.9);
+      this.debugRoadGraphics.lineBetween(road.start.x, road.start.y, road.end.x, road.end.y);
+
+      // Road ID and width tag
+      const midX = (road.start.x + road.end.x) / 2;
+      const midY = (road.start.y + road.end.y) / 2;
+      this.createText(midX, midY - 14, `${road.id} (${road.width}px)`, 10, '#06b6d4', true, 75);
+    }
+
+    // Intersection centers (amber diamond + label)
+    for (const inter of intersections) {
+      const ibox = getIntersectionBoundingBox(inter);
+      this.debugRoadGraphics.lineStyle(2, 0xf59e0b, 0.9);
+      this.debugRoadGraphics.strokeRect(ibox.x, ibox.y, ibox.width, ibox.height);
+
+      // Center crosshair marker
+      this.debugRoadGraphics.fillStyle(0xf59e0b, 1);
+      this.debugRoadGraphics.fillCircle(inter.center.x, inter.center.y, 4);
+
+      this.createText(
+        inter.center.x,
+        inter.center.y + 14,
+        `[${inter.id}]`,
+        10,
+        '#f59e0b',
+        true,
+        75,
+      );
     }
   }
 
@@ -333,6 +433,7 @@ export class WorldRenderer {
     this.buildingGraphics.clear();
     this.sceneryGraphics.clear();
     this.objectiveGraphics.clear();
+    this.debugRoadGraphics.clear();
     this.labelGroup.clear(true, true);
   }
 
@@ -342,6 +443,7 @@ export class WorldRenderer {
     this.buildingGraphics.destroy();
     this.sceneryGraphics.destroy();
     this.objectiveGraphics.destroy();
+    this.debugRoadGraphics.destroy();
     this.labelGroup.destroy(true);
   }
 }
