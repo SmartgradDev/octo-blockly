@@ -65,6 +65,7 @@ export interface Mission {
   difficulty?: MissionDifficulty;
   concepts?: string[];
   phase: number;
+  movementPolicy?: 'FREE_WORLD' | 'ROAD_ONLY' | 'RESTRICTED_ZONE';
 }
 
 export interface PhaseCategory {

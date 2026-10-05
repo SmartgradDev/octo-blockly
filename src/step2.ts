@@ -402,6 +402,9 @@ const loadMission = (mission: Mission) => {
   }
 
   worldCommandExecutor.getAdapter().resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
+  const activePolicy =
+    mission.movementPolicy || activeWorldMap.movementPolicy || 'FREE_WORLD';
+  worldCommandExecutor.setMovementPolicy(activePolicy);
   const initialEval = evaluateWorldMission(activeWorldMap, worldRobot);
 
   updateStep2View(
@@ -611,9 +614,12 @@ const runProgram = async () => {
 
     if (!result.ok) {
       hadError = true;
-      // If there was partial collision travel, smoothly animate to the safe target pose before halting
+      // If there was partial travel before collision or policy boundary, smoothly animate to safe target before halting
       if (
-        result.reason === 'WORLD_COLLISION' &&
+        (result.reason === 'WORLD_COLLISION' ||
+          result.reason === 'OFF_ROAD' ||
+          result.reason === 'RESTRICTED_ZONE' ||
+          result.reason === 'POLICY_VIOLATION') &&
         result.partialTravelRatio !== undefined &&
         result.partialTravelRatio > 0.001 &&
         simulationBridge
@@ -923,5 +929,12 @@ if (typeof window !== 'undefined') {
   };
   (window as any).__step2GetColliders = () => {
     return worldCommandExecutor.getCollisionSystem()?.getColliders() || [];
+  };
+  (window as any).__step2SetMovementPolicy = (policy: any) => {
+    worldCommandExecutor.setMovementPolicy(policy);
+    return worldCommandExecutor.getMovementPolicy().type;
+  };
+  (window as any).__step2GetMovementPolicy = () => {
+    return worldCommandExecutor.getMovementPolicy();
   };
 }

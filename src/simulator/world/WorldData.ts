@@ -109,4 +109,5 @@ export interface WorldMapData {
     position: Point2D;
     rotation: number;         // Continuous heading in radians
   };
+  movementPolicy?: 'FREE_WORLD' | 'ROAD_ONLY' | 'RESTRICTED_ZONE';
 }

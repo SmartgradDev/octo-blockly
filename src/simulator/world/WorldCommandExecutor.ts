@@ -18,6 +18,12 @@ import {
   WorldCollider,
   PathCollisionResult,
 } from './WorldCollisionSystem';
+import {
+  WorldMovementPolicy,
+  MovementPolicyConfig,
+  MovementPolicyResult,
+  WorldMovementPolicyEvaluator,
+} from './WorldMovementPolicy';
 
 export interface WorldMovementConfig {
   /**
@@ -71,6 +77,9 @@ export type WorldExecutionFailureReason =
   | 'OK'
   | 'WORLD_BOUNDARY'
   | 'WORLD_COLLISION'
+  | 'OFF_ROAD'
+  | 'RESTRICTED_ZONE'
+  | 'POLICY_VIOLATION'
   | 'BATTERY_DEPLETED'
   | 'UNKNOWN_COMMAND';
 
@@ -93,20 +102,29 @@ export class WorldCommandExecutor {
   private config: WorldMovementConfig;
   private adapter: WorldRobotAdapter;
   private collisionSystem: WorldCollisionSystem;
+  private policyEvaluator: WorldMovementPolicyEvaluator;
 
   constructor(
     worldBoundsOrMap: Size2D | WorldMapData,
     config: Partial<WorldMovementConfig> = {},
     adapter?: WorldRobotAdapter,
     collisionSystem?: WorldCollisionSystem,
+    policyEvaluator?: WorldMovementPolicyEvaluator,
   ) {
     if ('bounds' in worldBoundsOrMap) {
       this.worldBounds = worldBoundsOrMap.bounds;
       this.collisionSystem =
         collisionSystem || new WorldCollisionSystem(worldBoundsOrMap);
+      this.policyEvaluator =
+        policyEvaluator ||
+        new WorldMovementPolicyEvaluator(
+          worldBoundsOrMap,
+          worldBoundsOrMap.movementPolicy || 'FREE_WORLD',
+        );
     } else {
       this.worldBounds = worldBoundsOrMap;
       this.collisionSystem = collisionSystem || new WorldCollisionSystem();
+      this.policyEvaluator = policyEvaluator || new WorldMovementPolicyEvaluator();
     }
 
     this.config = {...DEFAULT_WORLD_MOVEMENT_CONFIG, ...config};
@@ -130,9 +148,25 @@ export class WorldCommandExecutor {
     return this.collisionSystem;
   }
 
+  public getMovementPolicy(): MovementPolicyConfig {
+    return this.policyEvaluator.getPolicy();
+  }
+
+  public getMovementPolicyEvaluator(): WorldMovementPolicyEvaluator {
+    return this.policyEvaluator;
+  }
+
+  public setMovementPolicy(policy: WorldMovementPolicy | Partial<MovementPolicyConfig>): void {
+    this.policyEvaluator.setPolicy(policy);
+  }
+
   public setWorldMap(map: WorldMapData): void {
     this.worldBounds = map.bounds;
     this.collisionSystem.loadFromWorldMap(map);
+    this.policyEvaluator.setWorldMap(map);
+    if (map.movementPolicy) {
+      this.policyEvaluator.setPolicy(map.movementPolicy);
+    }
   }
 
   /**
@@ -210,9 +244,54 @@ export class WorldCommandExecutor {
           tCollision = colResult.collisionDistance / colResult.totalDistance;
         }
 
-        // 3. Earliest blocking condition priority resolution
-        // Case A: Solid obstacle collision occurs earliest along movement path
-        if (tCollision < tBoundary && colResult.collided && colResult.collider) {
+        // 3. Movement Policy Evaluation (FREE_WORLD, ROAD_ONLY, RESTRICTED_ZONE)
+        const policyResult = this.policyEvaluator.evaluatePath(startPt, targetPt);
+        let tPolicy = Infinity;
+        if (!policyResult.allowed && policyResult.totalDistance > 0) {
+          tPolicy = (policyResult.violationDistance ?? 0) / policyResult.totalDistance;
+        }
+
+        // 4. Earliest blocking condition priority resolution
+        const tMin = Math.min(tBoundary, tCollision, tPolicy);
+
+        // Case A: Movement policy boundary breached earliest
+        if (tPolicy === tMin && tPolicy < Infinity && !policyResult.allowed) {
+          const safeTarget = policyResult.safeTarget || startPt;
+          const partialRatio =
+            policyResult.totalDistance > 0
+              ? (policyResult.safeDistance ?? 0) / policyResult.totalDistance
+              : 0;
+
+          this.adapter.setPose(
+            worldRobot,
+            safeTarget.x,
+            safeTarget.y,
+            worldRobot.rotation,
+          );
+          worldRobot.state = 'stopped';
+
+          const currentPose: RobotPose2D = {
+            x: worldRobot.x,
+            y: worldRobot.y,
+            rotation: worldRobot.rotation,
+          };
+
+          return {
+            ok: false,
+            command,
+            reason: (policyResult.reason === 'ALLOWED'
+              ? 'POLICY_VIOLATION'
+              : policyResult.reason) as WorldExecutionFailureReason,
+            message: policyResult.message || 'Cannot move — movement policy violation.',
+            previousPose,
+            currentPose,
+            collisionPoint: policyResult.violationPoint,
+            partialTravelRatio: partialRatio,
+          };
+        }
+
+        // Case B: Solid physical obstacle collision occurs earliest
+        if (tCollision === tMin && tCollision < Infinity && colResult.collided && colResult.collider) {
           const safeTarget = colResult.safeTarget || startPt;
           const partialRatio =
             colResult.totalDistance > 0
@@ -248,8 +327,8 @@ export class WorldCommandExecutor {
           };
         }
 
-        // Case B: World boundary reached earliest
-        if (tBoundary <= tCollision && tBoundary < Infinity) {
+        // Case C: World boundary reached earliest
+        if (tBoundary === tMin && tBoundary < Infinity) {
           worldRobot.state = 'stopped';
           return {
             ok: false,

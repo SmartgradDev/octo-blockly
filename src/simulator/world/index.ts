@@ -7,4 +7,5 @@ export * from './WorldRobotAdapter';
 export * from './WorldCommandExecutor';
 export * from './WorldMissionEvaluator';
 export * from './WorldCollisionSystem';
+export * from './WorldMovementPolicy';
 
