@@ -14,16 +14,16 @@ import {javascriptGenerator} from 'blockly/javascript';
 import {save, load} from './serialization';
 import {toolbox} from './toolbox';
 import {createRobotState, Direction, GridConfig} from './robot/RobotState';
-import {executeCommand, ProgramInterpreter} from './robot/CommandExecutor';
+import {ProgramInterpreter} from './robot/CommandExecutor';
 import {getMissionsByPhase, Mission, Position} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
-import {evaluateMission, MissionRuntimeState} from './robot/MissionEvaluator';
 import {PhaserSimulator, PhaserSimulationBridge} from './simulator';
 import {
   CAMPUS_TOWN_MAP,
   WorldRobotState,
   createWorldRobotState,
-  WorldRobotAdapter,
+  WorldCommandExecutor,
+  evaluateWorldMission,
   radiansToDegrees,
 } from './simulator/world';
 import octopusIcon from './assets/octopus-icon.png';
@@ -75,7 +75,7 @@ const robot = createRobotState(
   currentMission.start.direction,
 );
 
-// ── Step 2 Continuous World Robot State & Command Adapter ───────────
+// ── Step 2 Continuous World Robot State & Command Executor ──────────
 const activeWorldMap = CAMPUS_TOWN_MAP;
 const worldRobot: WorldRobotState = createWorldRobotState(
   activeWorldMap.spawnPoint.position.x,
@@ -84,7 +84,7 @@ const worldRobot: WorldRobotState = createWorldRobotState(
   50,
   currentMission.initialBattery,
 );
-const worldRobotAdapter = new WorldRobotAdapter();
+const worldCommandExecutor = new WorldCommandExecutor(activeWorldMap.bounds);
 
 const phaserContainer = document.getElementById('phaserSimulatorContainer');
 const telemetryHud = document.getElementById('telemetryHud');
@@ -153,7 +153,6 @@ function directionArrow(dir: Direction): string {
  * - Updates DOM Telemetry HUD
  */
 function updateStep2View(
-  currentCollectedItems: Position[] = [],
   progressText?: string,
   immediate: boolean = false,
 ): void {
@@ -164,7 +163,6 @@ function updateStep2View(
       robot,
       worldRobot,
       mission: currentMission,
-      collectedItems: currentCollectedItems,
       progressText,
       immediate,
     });
@@ -175,12 +173,12 @@ function updateStep2View(
     const headingDeg = Math.round(radiansToDegrees(worldRobot.rotation));
     const posChip = `<div class="hud-chip hud-chip-pos"><span class="hud-icon">📍</span><span class="hud-label">X:${worldRobot.x.toFixed(1)}, Y:${worldRobot.y.toFixed(1)}</span></div>`;
     const dirChip = `<div class="hud-chip hud-chip-dir"><span class="hud-icon">🧭</span><span class="hud-label">${headingDeg}° (${worldRobot.rotation.toFixed(2)} rad)</span></div>`;
-    const speedChip = `<div class="hud-chip hud-chip-speed"><span class="hud-icon">⚡</span><span class="hud-label">${robot.motorSpeed}%</span></div>`;
+    const speedChip = `<div class="hud-chip hud-chip-speed"><span class="hud-icon">⚡</span><span class="hud-label">${worldRobot.motorSpeedSetting}%</span></div>`;
 
     let batChip = '';
-    if (robot.battery !== undefined) {
-      const maxBat = robot.maxBattery || 100;
-      const currentBat = Math.max(0, robot.battery);
+    if (worldRobot.battery !== undefined) {
+      const maxBat = worldRobot.maxBattery || 100;
+      const currentBat = Math.max(0, worldRobot.battery);
       const batPct = Math.min(100, Math.round((currentBat / maxBat) * 100));
       const batColor =
         batPct > 50 ? 'battery-high' : batPct > 20 ? 'battery-mid' : 'battery-low';
@@ -342,7 +340,7 @@ const loadMission = (mission: Mission) => {
       ? Math.max(0, mission.initialBattery)
       : undefined;
 
-  worldRobotAdapter.resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
+  worldCommandExecutor.getAdapter().resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
 
   if (missionTitleEl) missionTitleEl.textContent = mission.title;
   if (missionDescEl) missionDescEl.textContent = mission.description;
@@ -385,17 +383,10 @@ const loadMission = (mission: Mission) => {
     });
   }
 
-  const initialRuntimeState: MissionRuntimeState = {
-    collectedItems: [],
-    visitedColors: new Set(),
-    executedActions: 0,
-    batteryDepleted: false,
-  };
-
-  const initialEval = evaluateMission(mission, robot, initialRuntimeState);
+  worldCommandExecutor.getAdapter().resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
+  const initialEval = evaluateWorldMission(activeWorldMap, worldRobot);
 
   updateStep2View(
-    initialRuntimeState.collectedItems,
     initialEval.progressText,
     true,
   );
@@ -459,7 +450,6 @@ if (missionSelect) {
 
 // Shared execution session state across pause/resume
 let activeInterpreter: ProgramInterpreter | null = null;
-let activeRuntimeState: MissionRuntimeState | null = null;
 let activeStartTime: number = 0;
 let accumulatedExecutionTime: number = 0;
 let lastStepTime: number = 0;
@@ -488,7 +478,6 @@ const stopProgram = () => {
   isPaused = false;
   isRunning = false;
   activeInterpreter = null;
-  activeRuntimeState = null;
   simulationBridge?.onStop(true);
   updateControlButtons();
   setStatus('Execution stopped.', 'error');
@@ -528,44 +517,10 @@ const runProgram = async () => {
       ? Math.max(0, currentMission.initialBattery)
       : undefined;
 
-  worldRobotAdapter.resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
-
-  activeRuntimeState = {
-    collectedItems: [],
-    visitedColors: new Set(),
-    executedActions: 0,
-    batteryDepleted: false,
-  };
-
-  const checkCellVisit = () => {
-    if (!activeRuntimeState) return;
-    if (currentMission.items) {
-      const foundItem = currentMission.items.find(
-        (it) =>
-          it.x === robot.x &&
-          it.y === robot.y &&
-          !activeRuntimeState!.collectedItems.some((ci) => ci.x === it.x && ci.y === it.y),
-      );
-      if (foundItem) {
-        activeRuntimeState.collectedItems.push({x: foundItem.x, y: foundItem.y});
-      }
-    }
-
-    if (currentMission.cellColors) {
-      const colorCell = currentMission.cellColors.find(
-        (c) => c.x === robot.x && c.y === robot.y,
-      );
-      if (colorCell) {
-        activeRuntimeState.visitedColors.add(colorCell.color);
-      }
-    }
-  };
-
-  checkCellVisit();
-  let currentEval = evaluateMission(currentMission, robot, activeRuntimeState);
+  worldCommandExecutor.getAdapter().resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
+  let currentEval = evaluateWorldMission(activeWorldMap, worldRobot);
 
   updateStep2View(
-    activeRuntimeState.collectedItems,
     currentEval.progressText,
     true,
   );
@@ -574,9 +529,6 @@ const runProgram = async () => {
     ws as Blockly.Workspace,
     robot,
     grid,
-    currentMission.obstacles,
-    currentMission.cellColors,
-    currentMission.lines,
   );
 
   setStatus('Starting execution in Phaser 4...');
@@ -619,27 +571,12 @@ const runProgram = async () => {
     const cmd = stepResult.command;
     const executedCount = activeInterpreter.getExecutedCommandCount();
 
-    // 1. Update continuous WorldRobotState
-    worldRobotAdapter.executeCommand(worldRobot, cmd);
+    // 1. Authoritative Step-2 World Command Execution
+    const result = worldCommandExecutor.execute(worldRobot, cmd);
 
-    // 2. Execute command on discrete robot state for mission goals
-    const result = executeCommand(
-      robot,
-      grid,
-      cmd,
-      currentMission.obstacles,
-    );
-
-    activeRuntimeState.executedActions = executedCount;
-    if (!result.ok && result.message.includes('Battery depleted')) {
-      activeRuntimeState.batteryDepleted = true;
-    }
-
-    checkCellVisit();
-    currentEval = evaluateMission(currentMission, robot, activeRuntimeState);
+    currentEval = evaluateWorldMission(activeWorldMap, worldRobot);
 
     updateStep2View(
-      activeRuntimeState.collectedItems,
       currentEval.progressText,
     );
 
@@ -649,12 +586,6 @@ const runProgram = async () => {
         `Step ${executedCount} (${cmd}): ${result.message}`,
         'error',
       );
-      break;
-    }
-
-    if (currentEval.failed) {
-      hadError = true;
-      setStatus(currentEval.message, 'error');
       break;
     }
 
@@ -668,7 +599,7 @@ const runProgram = async () => {
         executedActionCount: executedCount,
         blockCount: blockCount,
         timeMs: totalTimeMs,
-        optimalActionCount: currentMission.optimalCommandCount,
+        optimalActionCount: 8, // 8 commands from spawn to Science Plaza goal
       });
 
       const {best: bestScore, isNewBest} = updateBestScore(
@@ -703,7 +634,7 @@ const runProgram = async () => {
       setStatus(`Step ${executedCount} (${cmd}): ${result.message}`);
     }
 
-    const stepDelay = Math.max(100, Math.round(800 - robot.motorSpeed * 7));
+    const stepDelay = Math.max(100, Math.round(800 - worldRobot.motorSpeedSetting * 7));
     await delay(stepDelay);
   }
 
@@ -713,14 +644,13 @@ const runProgram = async () => {
     setStatus('No robot commands found. Drag some blocks!');
   } else if (!stopRequested && !hadError && !currentEval.completed) {
     setStatus(
-      `Robot stopped at (${robot.x}, ${robot.y}), but objective is not completed yet. Try again!`,
+      `Robot stopped at (X: ${worldRobot.x.toFixed(1)}, Y: ${worldRobot.y.toFixed(1)}), heading ${(radiansToDegrees(worldRobot.rotation)).toFixed(0)}°. Objective not reached yet. Try again!`,
     );
   }
 
   isRunning = false;
   isPaused = false;
   activeInterpreter = null;
-  activeRuntimeState = null;
   updateControlButtons();
 };
 
@@ -729,7 +659,6 @@ const resetRobot = () => {
   isPaused = false;
   isRunning = false;
   activeInterpreter = null;
-  activeRuntimeState = null;
 
   simulationBridge?.onStop(false);
 
@@ -740,32 +669,10 @@ const resetRobot = () => {
 
   updateControlButtons();
 
-  robot.x = currentMission.start.x;
-  robot.y = currentMission.start.y;
-  robot.direction = currentMission.start.direction;
-  robot.motorSpeed = 50;
-  robot.battery =
-    currentMission.initialBattery !== undefined
-      ? Math.max(0, currentMission.initialBattery)
-      : undefined;
-  robot.maxBattery =
-    currentMission.initialBattery !== undefined
-      ? Math.max(0, currentMission.initialBattery)
-      : undefined;
-
-  worldRobotAdapter.resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
-
-  const resetRuntimeState: MissionRuntimeState = {
-    collectedItems: [],
-    visitedColors: new Set(),
-    executedActions: 0,
-    batteryDepleted: false,
-  };
-
-  const initialEval = evaluateMission(currentMission, robot, resetRuntimeState);
+  worldCommandExecutor.getAdapter().resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
+  const initialEval = evaluateWorldMission(activeWorldMap, worldRobot);
 
   updateStep2View(
-    resetRuntimeState.collectedItems,
     initialEval.progressText,
     true,
   );
@@ -902,9 +809,16 @@ if (ws) {
 // ── Development & Validation Testing Hooks ──────────────────────────
 if (typeof window !== 'undefined') {
   (window as any).__step2TestPose = (x: number, y: number, rotation: number) => {
-    worldRobotAdapter.setPose(worldRobot, x, y, rotation);
-    updateStep2View([], 'Manual pose test', false);
+    worldCommandExecutor.getAdapter().setPose(worldRobot, x, y, rotation);
+    const evalResult = evaluateWorldMission(activeWorldMap, worldRobot);
+    updateStep2View(evalResult.progressText, false);
     return {x: worldRobot.x, y: worldRobot.y, rotation: worldRobot.rotation};
+  };
+  (window as any).__step2ExecuteCommand = (cmd: any) => {
+    const res = worldCommandExecutor.execute(worldRobot, cmd);
+    const evalResult = evaluateWorldMission(activeWorldMap, worldRobot);
+    updateStep2View(evalResult.progressText, false);
+    return res;
   };
   (window as any).__step2GetWorldRobot = () => ({...worldRobot});
 }
