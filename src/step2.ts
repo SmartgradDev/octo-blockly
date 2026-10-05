@@ -18,7 +18,7 @@ import {executeCommand, ProgramInterpreter} from './robot/CommandExecutor';
 import {getMissionsByPhase, Mission, Position} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
 import {evaluateMission, MissionRuntimeState} from './robot/MissionEvaluator';
-import {PhaserSimulator} from './simulator';
+import {PhaserSimulator, PhaserSimulationBridge} from './simulator';
 import octopusIcon from './assets/octopus-icon.png';
 import './index.css';
 
@@ -105,12 +105,15 @@ const ws = Blockly.inject(blocklyDiv, {
   renderer: 'zelos',
 });
 
-// ── Step 2 Phaser Simulator Instance ─────────────────────────────────
+// ── Step 2 Phaser Simulator & Bridge Instance ─────────────────────────
 let phaserSimulator: PhaserSimulator | null = null;
+let simulationBridge: PhaserSimulationBridge | null = null;
+
 if (phaserContainer) {
   phaserSimulator = new PhaserSimulator({
     parent: phaserContainer,
   });
+  simulationBridge = new PhaserSimulationBridge(phaserSimulator);
 }
 
 function directionArrow(dir: Direction): string {
@@ -128,24 +131,21 @@ function directionArrow(dir: Direction): string {
 
 /**
  * Updates the Step 2 visual presentation:
- * - Sends authoritative state snapshot to Phaser GridRenderer
+ * - Uses PhaserSimulationBridge to update Phaser GameObjects
  * - Updates DOM Telemetry HUD
  */
 function updateStep2View(
   currentCollectedItems: Position[] = [],
   progressText?: string,
 ): void {
-  // 1. Phaser Visual Renderer
-  if (phaserSimulator) {
-    phaserSimulator.updateState({
+  // 1. Phaser Simulation Bridge (Robot Engine -> Bridge -> Phaser Visual State)
+  if (simulationBridge) {
+    simulationBridge.onStateChange({
       grid,
       robot,
-      target: currentMission.target,
-      obstacles: currentMission.obstacles,
-      cellColors: currentMission.cellColors,
-      lines: currentMission.lines,
-      items: currentMission.items,
+      mission: currentMission,
       collectedItems: currentCollectedItems,
+      progressText,
     });
   }
 

@@ -1,16 +1,17 @@
 /**
- * PhaserGridRenderer — renders the simulation grid, robot, obstacles,
+ * PhaserGridRenderer — renders the simulation grid background, cells, obstacles,
  * and targets using simple Phaser graphics and text primitives.
  *
  * Architecture Rule:
  * The simulation state (RobotState, GridConfig, Mission) remains the authoritative
  * single source of truth. PhaserGridRenderer receives snapshot/reference of state
- * and updates Phaser Game Objects.
+ * and delegates robot rendering to the dedicated RobotRenderer.
  */
 
 import * as Phaser from 'phaser';
-import {Direction, GridConfig, RobotState} from '../robot/RobotState';
+import {GridConfig, RobotState} from '../robot/RobotState';
 import {Position, TargetPosition, ColoredCell} from '../robot/Mission';
+import {RobotRenderer, GridCoordinateConverter} from './RobotRenderer';
 
 export interface GridRenderData {
   grid: GridConfig;
@@ -23,12 +24,12 @@ export interface GridRenderData {
   collectedItems?: Position[];
 }
 
-export class PhaserGridRenderer {
+export class PhaserGridRenderer implements GridCoordinateConverter {
   private scene: Phaser.Scene;
   private backgroundGraphics: Phaser.GameObjects.Graphics;
   private cellsGraphics: Phaser.GameObjects.Graphics;
-  private robotGraphics: Phaser.GameObjects.Graphics;
   private textGroup: Phaser.GameObjects.Group;
+  private robotRenderer: RobotRenderer;
 
   // Cached layout geometry
   private gridOffsetX: number = 0;
@@ -39,8 +40,28 @@ export class PhaserGridRenderer {
     this.scene = scene;
     this.backgroundGraphics = scene.add.graphics();
     this.cellsGraphics = scene.add.graphics();
-    this.robotGraphics = scene.add.graphics();
     this.textGroup = scene.add.group();
+
+    // Dedicated RobotRenderer instance
+    this.robotRenderer = new RobotRenderer(scene, this);
+  }
+
+  /**
+   * Converts logical grid coordinates (col, row) into Phaser world coordinates (center of cell).
+   */
+  public toWorldPosition(col: number, row: number): {x: number; y: number} {
+    return {
+      x: this.gridOffsetX + col * this.cellSize + this.cellSize / 2,
+      y: this.gridOffsetY + row * this.cellSize + this.cellSize / 2,
+    };
+  }
+
+  public getCellSize(): number {
+    return this.cellSize;
+  }
+
+  public getRobotRenderer(): RobotRenderer {
+    return this.robotRenderer;
   }
 
   /**
@@ -66,10 +87,9 @@ export class PhaserGridRenderer {
     this.gridOffsetX = Math.floor((width - totalGridW) / 2);
     this.gridOffsetY = Math.floor(topMargin + (height - topMargin - totalGridH) / 2);
 
-    // 2. Clear previous frame visuals
+    // 2. Clear previous frame board visuals
     this.backgroundGraphics.clear();
     this.cellsGraphics.clear();
-    this.robotGraphics.clear();
     this.textGroup.clear(true, true);
 
     // 3. Render board background wrapper
@@ -158,126 +178,22 @@ export class PhaserGridRenderer {
 
         // Render cell contents
         if (isObstacle) {
-          // Obstacle shape: gray block + rock indicator
           this.cellsGraphics.fillStyle(0x64748b, 0.4);
           this.cellsGraphics.fillRoundedRect(x + inset + 4, y + inset + 4, drawSize - 8, drawSize - 8, 4);
           this.createText(centerX, centerY, '🪨', 16);
         } else if (isTarget) {
-          // Target star indicator
           this.createText(centerX, centerY, '⭐', 18);
         } else if (isUncollectedItem) {
-          // Gem item indicator
           this.createText(centerX, centerY, '💎', 16);
         } else if (isLine && !coloredCell) {
-          // Line track indicator
           this.createText(centerX, centerY, '🛤️', 14);
         }
       }
     }
 
-    // 5. Render Robot at robot.x, robot.y with direction indicator
-    this.renderRobot(robot);
-  }
-
-  /**
-   * Renders the robot avatar and direction arrow using geometric shapes and text
-   */
-  private renderRobot(robot: RobotState): void {
-    const robotCenterX = this.gridOffsetX + robot.x * this.cellSize + this.cellSize / 2;
-    const robotCenterY = this.gridOffsetY + robot.y * this.cellSize + this.cellSize / 2;
-    const radius = Math.floor((this.cellSize - 12) / 2);
-
-    // Robot body circle (cheerful primary blue/indigo)
-    this.robotGraphics.fillStyle(0x2563eb, 1);
-    this.robotGraphics.fillCircle(robotCenterX, robotCenterY, radius);
-
-    // Robot outline
-    this.robotGraphics.lineStyle(2, 0x1d4ed8, 1);
-    this.robotGraphics.strokeCircle(robotCenterX, robotCenterY, radius);
-
-    // Robot face / visor (light cyan)
-    this.robotGraphics.fillStyle(0x67e8f9, 1);
-    this.robotGraphics.fillRoundedRect(
-      robotCenterX - radius * 0.55,
-      robotCenterY - radius * 0.35,
-      radius * 1.1,
-      radius * 0.7,
-      3,
-    );
-
-    // Directional pointer / arrow triangle
-    this.renderDirectionPointer(robotCenterX, robotCenterY, radius, robot.direction);
-
-    // Direction text symbol badge in corner
-    const badgeText = this.getDirectionSymbol(robot.direction);
-    this.createText(robotCenterX, robotCenterY, badgeText, 11, '#ffffff');
-  }
-
-  private renderDirectionPointer(
-    cx: number,
-    cy: number,
-    radius: number,
-    dir: Direction,
-  ): void {
-    const tipDistance = radius + 5;
-    const baseDistance = radius - 2;
-    const halfWidth = 5;
-
-    let tipX = cx;
-    let tipY = cy;
-    let b1X = cx;
-    let b1Y = cy;
-    let b2X = cx;
-    let b2Y = cy;
-
-    switch (dir) {
-      case 'NORTH':
-        tipY = cy - tipDistance;
-        b1X = cx - halfWidth;
-        b1Y = cy - baseDistance;
-        b2X = cx + halfWidth;
-        b2Y = cy - baseDistance;
-        break;
-      case 'SOUTH':
-        tipY = cy + tipDistance;
-        b1X = cx - halfWidth;
-        b1Y = cy + baseDistance;
-        b2X = cx + halfWidth;
-        b2Y = cy + baseDistance;
-        break;
-      case 'EAST':
-        tipX = cx + tipDistance;
-        b1X = cx + baseDistance;
-        b1Y = cy - halfWidth;
-        b2X = cx + baseDistance;
-        b2Y = cy + halfWidth;
-        break;
-      case 'WEST':
-        tipX = cx - tipDistance;
-        b1X = cx - baseDistance;
-        b1Y = cy - halfWidth;
-        b2X = cx - baseDistance;
-        b2Y = cy + halfWidth;
-        break;
-    }
-
-    this.robotGraphics.fillStyle(0xf59e0b, 1);
-    this.robotGraphics.fillTriangle(tipX, tipY, b1X, b1Y, b2X, b2Y);
-    this.robotGraphics.lineStyle(1, 0xd97706, 1);
-    this.robotGraphics.strokeTriangle(tipX, tipY, b1X, b1Y, b2X, b2Y);
-  }
-
-  private getDirectionSymbol(dir: Direction): string {
-    switch (dir) {
-      case 'NORTH':
-        return '▲';
-      case 'SOUTH':
-        return '▼';
-      case 'EAST':
-        return '▶';
-      case 'WEST':
-        return '◀';
-    }
+    // 5. Delegate robot rendering to the dedicated RobotRenderer
+    this.robotRenderer.setCoordinateConverter(this);
+    this.robotRenderer.render(robot);
   }
 
   private createText(
@@ -300,7 +216,7 @@ export class PhaserGridRenderer {
   public destroy(): void {
     this.backgroundGraphics.destroy();
     this.cellsGraphics.destroy();
-    this.robotGraphics.destroy();
     this.textGroup.destroy(true);
+    this.robotRenderer.destroy();
   }
 }
