@@ -1315,6 +1315,63 @@ body {
   height: 100% !important;
 }
 
+/* Floating Camera Follow & Zoom Toolbar */
+.sim-camera-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  border-radius: 8px;
+  padding: 4px 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+  user-select: none;
+}
+
+.sim-cam-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.sim-cam-btn:hover {
+  background: #334155;
+  color: #38bdf8;
+  border-color: #475569;
+}
+
+.sim-cam-btn.active {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.5);
+}
+
+.sim-cam-zoom-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #94a3b8;
+  padding: 2px 6px;
+  min-width: 40px;
+  text-align: center;
+}
+
 /* Step 2 Telemetry & Sensor HUD (Bottom Bar) */
 .step2-telemetry-hud {
   min-height: 48px;

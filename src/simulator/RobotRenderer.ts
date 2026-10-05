@@ -68,6 +68,11 @@ export class RobotRenderer {
   private currentRadius: number = 0;
   private pendingResolvers: Set<() => void> = new Set();
 
+  // Continuous frame-to-frame locomotion tracking
+  private lastTickX: number = 0;
+  private lastTickY: number = 0;
+  private lastTickRot: number = 0;
+
   constructor(
     scene: Phaser.Scene,
     coordinateConverter?: GridCoordinateConverter,
@@ -88,6 +93,10 @@ export class RobotRenderer {
 
   public getAnimationController(): RobotAnimationController {
     return this.animController;
+  }
+
+  public getContainer(): Phaser.GameObjects.Container {
+    return this.container;
   }
 
   public setAnimationDebug(enabled: boolean): void {
@@ -311,6 +320,9 @@ export class RobotRenderer {
       this.container.setPosition(targetX, targetY);
       this.container.setRotation(targetAngle);
       this.lastTargetAngle = targetAngle;
+      this.lastTickX = targetX;
+      this.lastTickY = targetY;
+      this.lastTickRot = targetAngle;
       this.isInitialized = true;
       this.animController.setState('IDLE');
       if (onProgress) {
@@ -334,6 +346,9 @@ export class RobotRenderer {
 
     if (!hasMoved && !hasTurned) {
       this.animController.setState('IDLE');
+      this.lastTickX = currentX;
+      this.lastTickY = currentY;
+      this.lastTickRot = this.container.rotation;
       if (onProgress) {
         onProgress({x: currentX, y: currentY, rotation: this.container.rotation});
       }
@@ -348,7 +363,12 @@ export class RobotRenderer {
       this.stopTurnTween(false);
     }
 
-    // Determine movement direction (forward vs backward) relative to heading
+    // Initialize frame tick anchors for distance tracking
+    this.lastTickX = this.container.x;
+    this.lastTickY = this.container.y;
+    this.lastTickRot = this.container.rotation;
+
+    // Determine initial movement direction (forward vs backward) relative to heading
     const currentRot = this.container.rotation;
     const headingX = Math.cos(currentRot);
     const headingY = Math.sin(currentRot);
@@ -371,25 +391,46 @@ export class RobotRenderer {
         pendingAnimations++;
         const moveDur = durationMs !== undefined ? durationMs : this.config.moveDurationMs;
         this.animController.setState(moveAnimState);
+        // Linear continuous interpolation: constant velocity rolling, no hopping/lunging
         this.activeMoveTween = this.scene.tweens.add({
           targets: this.container,
           x: targetX,
           y: targetY,
           duration: moveDur,
-          ease: 'Cubic.easeOut',
-          onUpdate: (tween: any) => {
-            const progress = tween?.progress ?? 0;
-            this.animController.onStepProgress(moveAnimState, progress);
+          ease: 'Linear',
+          onUpdate: () => {
+            const curX = this.container.x;
+            const curY = this.container.y;
+            const dx = curX - this.lastTickX;
+            const dy = curY - this.lastTickY;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist > 0.0001) {
+              const heading = this.container.rotation;
+              const hx = Math.cos(heading);
+              const hy = Math.sin(heading);
+              const travelDot = dx * hx + dy * hy;
+              const sign = travelDot >= -0.0001 ? 1 : -1;
+              // Tread animation tied to actual continuous distance traveled
+              this.animController.advanceTreadsByDistance(sign * dist);
+              this.animController.setState(sign >= 0 ? 'MOVING_FORWARD' : 'MOVING_BACKWARD');
+            }
+
+            this.lastTickX = curX;
+            this.lastTickY = curY;
+
             if (onProgress) {
               onProgress({
-                x: this.container.x,
-                y: this.container.y,
+                x: curX,
+                y: curY,
                 rotation: this.container.rotation,
               });
             }
           },
           onComplete: () => {
             this.activeMoveTween = null;
+            this.lastTickX = this.container.x;
+            this.lastTickY = this.container.y;
             if (!this.activeTurnTween) {
               this.animController.setState('IDLE');
             }
@@ -410,21 +451,28 @@ export class RobotRenderer {
         const destinationAngle = currentRotation + angleDelta;
         const turnDur = durationMs !== undefined ? durationMs : this.config.turnDurationMs;
 
+        // Linear continuous rotation around stable contact center (0, 0)
         this.activeTurnTween = this.scene.tweens.add({
           targets: this.container,
           rotation: destinationAngle,
           duration: turnDur,
-          ease: 'Cubic.easeOut',
-          onUpdate: (tween: any) => {
-            const progress = tween?.progress ?? 0;
-            if (!hasMoved) {
-              this.animController.onStepProgress('TURNING', progress);
+          ease: 'Linear',
+          onUpdate: () => {
+            const curRot = this.container.rotation;
+            const dRot = this.getShortestAngleDelta(this.lastTickRot, curRot);
+            if (Math.abs(dRot) > 0.0001) {
+              this.animController.advanceTreadsByAngularDelta(dRot);
+              if (!this.activeMoveTween) {
+                this.animController.setState('TURNING');
+              }
             }
+            this.lastTickRot = curRot;
+
             if (onProgress) {
               onProgress({
                 x: this.container.x,
                 y: this.container.y,
-                rotation: this.container.rotation,
+                rotation: curRot,
               });
             }
           },
@@ -437,6 +485,7 @@ export class RobotRenderer {
             else if (norm <= -Math.PI) norm += twoPi;
             this.container.setRotation(norm);
             this.lastTargetAngle = norm;
+            this.lastTickRot = norm;
             if (!this.activeMoveTween) {
               this.animController.setState('IDLE');
             }
@@ -478,6 +527,9 @@ export class RobotRenderer {
     this.stopTurnTween(false);
     this.animController.resetVisualState();
     if ('rotation' in pose) {
+      this.lastTickX = pose.x;
+      this.lastTickY = pose.y;
+      this.lastTickRot = pose.rotation;
       return this.renderWorld(pose, true);
     } else {
       return this.render(pose, true);

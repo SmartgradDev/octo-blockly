@@ -473,6 +473,7 @@ const loadMission = (mission: Mission) => {
 
   const best = getBestScore(mission.id);
   const bestStr = best !== null ? ` (Session Best: ${best})` : '';
+  phaserSimulator?.resetCamera();
   setStatus(`Loaded ${mission.title}${bestStr}. Program the robot in Step 2!`);
 };
 
@@ -842,6 +843,7 @@ const resetRobot = () => {
 
   const best = getBestScore(currentMission.id);
   const bestStr = best !== null ? ` (Session Best: ${best})` : '';
+  phaserSimulator?.resetCamera();
   setStatus(`Mission reset${bestStr}. Program the robot in Step 2!`);
 };
 
@@ -1031,4 +1033,78 @@ if (typeof window !== 'undefined') {
   (window as any).__step2IsAnimationDebugEnabled = () => {
     return phaserSimulator?.isAnimationDebugEnabled() || false;
   };
+  (window as any).__step2SetCameraDebug = (enabled: boolean) => {
+    phaserSimulator?.setCameraDebug(enabled);
+    return enabled;
+  };
+  (window as any).__step2IsCameraDebugEnabled = () => {
+    return phaserSimulator?.isCameraDebugEnabled() || false;
+  };
+  (window as any).__step2GetCameraState = () => {
+    return phaserSimulator?.getCameraState() || null;
+  };
+  (window as any).__step2CameraZoomIn = () => {
+    return phaserSimulator?.zoomIn() || 1.0;
+  };
+  (window as any).__step2CameraZoomOut = () => {
+    return phaserSimulator?.zoomOut() || 1.0;
+  };
+  (window as any).__step2CameraReset = () => {
+    phaserSimulator?.resetCamera();
+  };
+  (window as any).__step2SetCameraFollow = (enabled: boolean) => {
+    phaserSimulator?.setCameraFollow(enabled);
+    return enabled;
+  };
+  (window as any).__step2IsCameraFollowEnabled = () => {
+    return phaserSimulator?.isCameraFollowEnabled() || false;
+  };
 }
+
+// ── Simulator Floating Camera Toolbar ───────────────────────────────
+const simCamZoomLabel = document.getElementById('simCamZoomLabel');
+const updateCamZoomBadge = () => {
+  if (simCamZoomLabel && phaserSimulator) {
+    const z = Math.round(phaserSimulator.getZoom() * 100);
+    simCamZoomLabel.textContent = `${z}%`;
+  }
+};
+
+document.getElementById('simCamZoomIn')?.addEventListener('click', () => {
+  phaserSimulator?.zoomIn();
+  updateCamZoomBadge();
+});
+document.getElementById('simCamZoomOut')?.addEventListener('click', () => {
+  phaserSimulator?.zoomOut();
+  updateCamZoomBadge();
+});
+document.getElementById('simCamReset')?.addEventListener('click', () => {
+  phaserSimulator?.resetCamera();
+  updateCamZoomBadge();
+});
+const followToggleBtn = document.getElementById('simCamFollowToggle');
+followToggleBtn?.addEventListener('click', () => {
+  if (phaserSimulator) {
+    const isFollowing = phaserSimulator.isCameraFollowEnabled();
+    phaserSimulator.setCameraFollow(!isFollowing);
+    followToggleBtn.classList.toggle('active', !isFollowing);
+  }
+});
+
+// Global keyboard shortcuts for camera interaction
+window.addEventListener('keydown', (e: KeyboardEvent) => {
+  const activeTag = document.activeElement?.tagName?.toLowerCase();
+  if (activeTag === 'input' || activeTag === 'textarea') return;
+  if (e.key === '+' || e.key === '=') {
+    phaserSimulator?.zoomIn();
+    updateCamZoomBadge();
+  } else if (e.key === '-' || e.key === '_') {
+    phaserSimulator?.zoomOut();
+    updateCamZoomBadge();
+  } else if (e.key === '0') {
+    phaserSimulator?.resetZoom();
+    updateCamZoomBadge();
+  } else if (e.key === 'f' || e.key === 'F') {
+    phaserSimulator?.recenterCamera();
+  }
+});

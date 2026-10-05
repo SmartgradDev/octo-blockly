@@ -133,6 +133,55 @@ export class PhaserSimulator {
     this.scene?.updateMissionObjects(objects);
   }
 
+  // ── Camera Follow & Zoom Controls ──────────────────────────────────
+  public zoomIn(): number {
+    return this.scene ? this.scene.zoomIn() : 1.0;
+  }
+
+  public zoomOut(): number {
+    return this.scene ? this.scene.zoomOut() : 1.0;
+  }
+
+  public resetZoom(): number {
+    return this.scene ? this.scene.resetZoom() : 1.0;
+  }
+
+  public setZoom(zoom: number, smooth: boolean = true): number {
+    return this.scene ? this.scene.setZoom(zoom, smooth) : 1.0;
+  }
+
+  public getZoom(): number {
+    return this.scene ? this.scene.getZoom() : 1.0;
+  }
+
+  public recenterCamera(immediate: boolean = false): void {
+    this.scene?.recenterCamera(immediate);
+  }
+
+  public resetCamera(): void {
+    this.scene?.resetCamera();
+  }
+
+  public setCameraFollow(enabled: boolean): void {
+    this.scene?.setCameraFollow(enabled);
+  }
+
+  public isCameraFollowEnabled(): boolean {
+    return this.scene ? this.scene.isCameraFollowEnabled() : false;
+  }
+
+  public setCameraDebug(enabled: boolean): void {
+    this.scene?.setCameraDebug(enabled);
+  }
+
+  public isCameraDebugEnabled(): boolean {
+    return this.scene ? this.scene.isCameraDebugEnabled() : false;
+  }
+
+  public getCameraState(): any {
+    return this.scene ? this.scene.getCameraState() : null;
+  }
+
   public getGame(): Phaser.Game | null {
     return this.game;
   }

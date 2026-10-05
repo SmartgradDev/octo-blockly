@@ -192,8 +192,17 @@
           </div>
         </div>
 
-        <!-- Dedicated Phaser Canvas Mount Container -->
-        <div id="phaserSimulatorContainer" class="step2-phaser-container"></div>
+        <!-- Dedicated Phaser Canvas Mount Container with Camera Toolbar -->
+        <div id="phaserSimulatorContainer" class="step2-phaser-container">
+          <!-- Floating Camera Follow & Zoom Toolbar -->
+          <div class="sim-camera-toolbar" id="simCameraToolbar">
+            <button class="sim-cam-btn" id="simCamZoomIn" title="Zoom In (+)">+</button>
+            <button class="sim-cam-btn" id="simCamZoomOut" title="Zoom Out (−)">−</button>
+            <button class="sim-cam-btn" id="simCamReset" title="Recenter Camera on Robot (⛶)">⛶</button>
+            <button class="sim-cam-btn active" id="simCamFollowToggle" title="Toggle Camera Follow (🎥)">🎥</button>
+            <span class="sim-cam-zoom-badge" id="simCamZoomLabel">100%</span>
+          </div>
+        </div>
 
         <!-- Robot Telemetry HUD at bottom of simulator viewport -->
         <div id="telemetryHud" class="step2-telemetry-hud"></div>
