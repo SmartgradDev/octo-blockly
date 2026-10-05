@@ -5,3 +5,4 @@ export * from './RobotSimulatorScene';
 export * from './PhaserSimulator';
 export * from './PhaserSimulationBridge';
 export * from './world';
+export * from './sound/SoundSystem';

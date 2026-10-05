@@ -17,7 +17,7 @@ import {createRobotState, Direction, GridConfig} from './robot/RobotState';
 import {ProgramInterpreter} from './robot/CommandExecutor';
 import {getMissionsByPhase, Mission, Position} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
-import {PhaserSimulator, PhaserSimulationBridge} from './simulator';
+import {PhaserSimulator, PhaserSimulationBridge, soundSystem} from './simulator';
 import {WorldRobotPose} from './simulator/RobotRenderer';
 import {
   CAMPUS_TOWN_MAP,
@@ -521,6 +521,8 @@ let lastStepTime: number = 0;
 
 const pauseProgram = () => {
   if (!isRunning || isPaused) return;
+  soundSystem.playClick();
+  soundSystem.stopMotor();
   isPaused = true;
   accumulatedExecutionTime += performance.now() - lastStepTime;
   simulationBridge?.onPause();
@@ -534,6 +536,7 @@ const pauseProgram = () => {
 
 const resumeProgram = () => {
   if (!isRunning || !isPaused) return;
+  soundSystem.playClick();
   isPaused = false;
   lastStepTime = performance.now();
   simulationBridge?.onResume();
@@ -543,6 +546,8 @@ const resumeProgram = () => {
 
 const stopProgram = () => {
   if (!isRunning) return;
+  soundSystem.playClick();
+  soundSystem.stopMotor();
   stopRequested = true;
   isPaused = false;
   isRunning = false;
@@ -570,6 +575,8 @@ const runProgram = async () => {
     }
     return;
   }
+
+  soundSystem.playClick();
 
   // Check if workspace has blocks
   const allBlocks = ws.getAllBlocks(false);
@@ -632,6 +639,7 @@ const runProgram = async () => {
 
     // While paused, wait safely without consuming CPU or advancing interpreter
     while (isPaused && !stopRequested) {
+      soundSystem.stopMotor();
       await delay(50);
     }
 
@@ -643,6 +651,7 @@ const runProgram = async () => {
 
     if (stepResult.limitExceeded) {
       hadError = true;
+      soundSystem.stopMotor();
       setStatus(
         stepResult.error ||
           '⚠️ Program limit exceeded! Maximum 500 robot commands per run.',
@@ -657,15 +666,31 @@ const runProgram = async () => {
 
     const cmd = stepResult.command;
     const executedCount = activeInterpreter.getExecutedCommandCount();
+    const isTurn = cmd === 'TURN_LEFT' || cmd === 'TURN_RIGHT';
+
+    // Audio cue for locomotion
+    if (isTurn) {
+      soundSystem.stopMotor();
+      soundSystem.playTurn();
+    } else {
+      soundSystem.playMotor(true);
+    }
 
     // 1. Authoritative Step-2 World Command Execution
     const result = worldCommandExecutor.execute(worldRobot, cmd);
 
-    // If objects were collected or interacted with, refresh mission objects in simulator visuals
+    // If objects were collected or interacted with, refresh mission objects in simulator visuals and play audio
     if (result.interactions && result.interactions.length > 0) {
       phaserSimulator?.updateMissionObjects(
         worldCommandExecutor.getMissionObjectSystem().getObjects(),
       );
+      for (const event of result.interactions) {
+        if (event.semanticType === 'HAZARD_CONTACT' || event.foodClassification === 'UNHEALTHY') {
+          soundSystem.playHazard();
+        } else {
+          soundSystem.playCollect();
+        }
+      }
     }
 
     currentEval = evaluateWorldMission(
@@ -676,6 +701,11 @@ const runProgram = async () => {
 
     if (!result.ok) {
       hadError = true;
+      soundSystem.stopMotor();
+      if (result.reason === 'WORLD_COLLISION' || result.reason === 'WORLD_BOUNDARY') {
+        soundSystem.playCollision();
+      }
+
       // If there was partial travel before collision or policy boundary, smoothly animate to safe target before halting
       if (
         (result.reason === 'WORLD_COLLISION' ||
@@ -686,10 +716,10 @@ const runProgram = async () => {
         result.partialTravelRatio > 0.001 &&
         simulationBridge
       ) {
-        const isTurn = cmd === 'TURN_LEFT' || cmd === 'TURN_RIGHT';
         const baseDurationMs = calculateStepDurationMs(
           worldRobot.motorSpeedSetting,
           isTurn,
+          undefined,
           worldCommandExecutor.getMovementConfig(),
         );
         const partialDurationMs = Math.max(
@@ -717,10 +747,10 @@ const runProgram = async () => {
     }
 
     // 2. Smooth continuous world movement & turning (Phaser 4 tweens)
-    const isTurn = cmd === 'TURN_LEFT' || cmd === 'TURN_RIGHT';
     const durationMs = calculateStepDurationMs(
       worldRobot.motorSpeedSetting,
       isTurn,
+      undefined,
       worldCommandExecutor.getMovementConfig(),
     );
 
@@ -745,10 +775,14 @@ const runProgram = async () => {
     updateTelemetryDisplay(worldRobot, currentEval.progressText);
 
     if (stopRequested) {
+      soundSystem.stopMotor();
       break;
     }
 
     if (currentEval.completed) {
+      soundSystem.stopMotor();
+      soundSystem.playSuccess();
+
       const totalTimeMs =
         accumulatedExecutionTime + (performance.now() - lastStepTime);
       const blockCount = ws.getAllBlocks(false).length;
@@ -791,9 +825,17 @@ const runProgram = async () => {
       break;
     }
 
-    // Brief inter-command settle delay
-    await delay(30);
+    // Inter-command transition:
+    // If turning, settle briefly (40ms) for realistic rotational pause.
+    // If consecutive linear moves, yield to microtask so robot rolls continuously without stop/start hitching.
+    if (isTurn) {
+      await delay(40);
+    } else {
+      await Promise.resolve();
+    }
   }
+
+  soundSystem.stopMotor();
 
   const totalExecuted = activeInterpreter ? activeInterpreter.getExecutedCommandCount() : 0;
 
@@ -812,6 +854,8 @@ const runProgram = async () => {
 };
 
 const resetRobot = () => {
+  soundSystem.playClick();
+  soundSystem.stopMotor();
   stopRequested = true;
   isPaused = false;
   isRunning = false;
@@ -848,6 +892,7 @@ const resetRobot = () => {
 };
 
 const handleNextMission = () => {
+  soundSystem.playClick();
   const currentIdx = activeMissionsList.findIndex((m) => m.id === currentMission.id);
   if (currentIdx >= 0 && currentIdx < activeMissionsList.length - 1) {
     const nextMission = activeMissionsList[currentIdx + 1];
@@ -1059,9 +1104,68 @@ if (typeof window !== 'undefined') {
   (window as any).__step2IsCameraFollowEnabled = () => {
     return phaserSimulator?.isCameraFollowEnabled() || false;
   };
+
+  // Phase 4.23: Speed & Motion Observability Hooks
+  (window as any).__step2GetRobotMotionConfig = () => {
+    return {
+      ...worldCommandExecutor.getMovementConfig(),
+    };
+  };
+  (window as any).__step2SetRobotMoveSpeed = (speedPxPerSec: number) => {
+    worldCommandExecutor.setMoveSpeed(speedPxPerSec);
+    return worldCommandExecutor.getMovementConfig();
+  };
+  (window as any).__step2SetRobotTurnSpeed = (speedDegPerSec: number) => {
+    worldCommandExecutor.setTurnSpeed(speedDegPerSec);
+    return worldCommandExecutor.getMovementConfig();
+  };
+
+  // Phase 4.23: Sound Foundation Hooks
+  (window as any).__step2SetSoundMuted = (muted: boolean) => {
+    soundSystem.setMuted(muted);
+    return soundSystem.isMuted();
+  };
+  (window as any).__step2IsSoundMuted = () => {
+    return soundSystem.isMuted();
+  };
+  (window as any).__step2SetSoundVolume = (volume: number) => {
+    soundSystem.setVolume(volume);
+    return soundSystem.getVolume();
+  };
+  (window as any).__step2GetSoundVolume = () => {
+    return soundSystem.getVolume();
+  };
+  (window as any).__step2PlaySound = (type: string) => {
+    switch (type) {
+      case 'motor':
+        soundSystem.playMotor(true);
+        break;
+      case 'stopMotor':
+        soundSystem.stopMotor();
+        break;
+      case 'turn':
+        soundSystem.playTurn();
+        break;
+      case 'collision':
+        soundSystem.playCollision();
+        break;
+      case 'collect':
+        soundSystem.playCollect();
+        break;
+      case 'hazard':
+        soundSystem.playHazard();
+        break;
+      case 'success':
+        soundSystem.playSuccess();
+        break;
+      case 'click':
+        soundSystem.playClick();
+        break;
+    }
+  };
 }
 
-// ── Simulator Floating Camera Toolbar ───────────────────────────────
+// ── Simulator Floating Camera & Sound Toolbar ────────────────────────
 const simCamZoomLabel = document.getElementById('simCamZoomLabel');
 const updateCamZoomBadge = () => {
   if (simCamZoomLabel && phaserSimulator) {
@@ -1071,24 +1175,39 @@ const updateCamZoomBadge = () => {
 };
 
 document.getElementById('simCamZoomIn')?.addEventListener('click', () => {
+  soundSystem.playClick();
   phaserSimulator?.zoomIn();
   updateCamZoomBadge();
 });
 document.getElementById('simCamZoomOut')?.addEventListener('click', () => {
+  soundSystem.playClick();
   phaserSimulator?.zoomOut();
   updateCamZoomBadge();
 });
 document.getElementById('simCamReset')?.addEventListener('click', () => {
+  soundSystem.playClick();
   phaserSimulator?.resetCamera();
   updateCamZoomBadge();
 });
 const followToggleBtn = document.getElementById('simCamFollowToggle');
 followToggleBtn?.addEventListener('click', () => {
+  soundSystem.playClick();
   if (phaserSimulator) {
     const isFollowing = phaserSimulator.isCameraFollowEnabled();
     phaserSimulator.setCameraFollow(!isFollowing);
     followToggleBtn.classList.toggle('active', !isFollowing);
   }
+});
+
+const soundToggleBtn = document.getElementById('simSoundToggle');
+soundToggleBtn?.addEventListener('click', () => {
+  const isMuted = soundSystem.isMuted();
+  soundSystem.setMuted(!isMuted);
+  if (soundToggleBtn) {
+    soundToggleBtn.textContent = !isMuted ? '🔇' : '🔊';
+    soundToggleBtn.classList.toggle('active', isMuted);
+  }
+  soundSystem.playClick();
 });
 
 // Global keyboard shortcuts for camera interaction

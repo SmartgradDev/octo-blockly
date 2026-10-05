@@ -207,140 +207,218 @@ export class RobotAnimationController {
   }
 
   /**
-   * Draws the grounded, symmetrical educational robot visual base.
-   * Geometric center of mass and contact footprint are centered at (0, 0).
+   * Draws the realistic educational robotics rover visual base.
+   * Completely symmetrical contact footprint centered strictly at (0, 0).
    */
   public drawRobotBase(): void {
     const r = this.config.radius;
 
-    // 1. Ground Contact Shadow (centered at (0, 0) on the ground plane, zero angular wobble)
+    // 1. Dual-Layer Ground Contact Shadows (diffuse ambient + 4 tire contact patches)
     this.shadowGraphics.clear();
-    this.shadowGraphics.fillStyle(0x0f172a, 0.35);
+    // Soft ambient chassis shadow
+    this.shadowGraphics.fillStyle(0x020617, 0.32);
     this.shadowGraphics.fillRoundedRect(-r * 1.15, -r * 1.05, r * 2.3, r * 2.1, 8);
 
-    // 2. Symmetrical Tracks / Wheels
+    // 4 Tire contact ground patches directly under each wheel
+    this.shadowGraphics.fillStyle(0x020617, 0.48);
+    const wheelHalfL = r * 0.45;
+    const wheelW = 6;
+    const xOffsets = [-r * 0.52, r * 0.52];
+    const yTireTops = [-r - 3, r - 3];
+
+    for (const xOff of xOffsets) {
+      for (const yOff of yTireTops) {
+        this.shadowGraphics.fillRoundedRect(xOff - wheelHalfL - 1, yOff - 1, wheelHalfL * 2 + 2, wheelW + 2, 3);
+      }
+    }
+
+    // 2. 4 Heavy-Duty All-Terrain Wheels with Distance-Synchronized Rubber Treads
     this.drawWheels();
 
-    // 3. Main Chassis Hull (symmetrically centered at (0, 0))
+    // 3. Robotic Frame & Industrial Dual Chassis Rails
     this.bodyGraphics.clear();
-    const hullHalfW = r * 0.85;
-    const hullHalfH = r * 0.7;
 
-    // Rounded main hull
+    // Structural Aluminum Flank Rails (connecting front and rear axles)
+    const railHalfW = r * 0.85;
+    this.bodyGraphics.fillStyle(0x334155, 1);
+    this.bodyGraphics.fillRoundedRect(-railHalfW, -r - 1, railHalfW * 2, 3, 1.5);
+    this.bodyGraphics.fillRoundedRect(-railHalfW, r - 2, railHalfW * 2, 3, 1.5);
+
+    // 4 Stainless Steel Suspension Hardware Bolts at axle pivots
+    this.bodyGraphics.fillStyle(0x94a3b8, 1);
+    for (const xOff of xOffsets) {
+      this.bodyGraphics.fillCircle(xOff, -r, 1.6);
+      this.bodyGraphics.fillCircle(xOff, r, 1.6);
+    }
+
+    // Main Robotic Hull (anodized cobalt-blue armored chassis)
+    const hullHalfW = r * 0.82;
+    const hullHalfH = r * 0.68;
     this.bodyGraphics.fillStyle(this.config.bodyColor, 1);
     this.bodyGraphics.fillRoundedRect(-hullHalfW, -hullHalfH, hullHalfW * 2, hullHalfH * 2, 5);
 
-    // Outer hull bevel
+    // Beveled armor perimeter outline
     this.bodyGraphics.lineStyle(1.5, 0x1d4ed8, 1);
     this.bodyGraphics.strokeRoundedRect(-hullHalfW, -hullHalfH, hullHalfW * 2, hullHalfH * 2, 5);
 
-    // Top hood tech plate (symmetrically centered)
+    // Dark Circuit Bay Deck (embedded electronics plate)
     const deckHalfW = r * 0.55;
-    const deckHalfH = r * 0.45;
-    this.bodyGraphics.fillStyle(0x3b82f6, 1);
+    const deckHalfH = r * 0.46;
+    this.bodyGraphics.fillStyle(0x0f172a, 0.95);
     this.bodyGraphics.fillRoundedRect(-deckHalfW, -deckHalfH, deckHalfW * 2, deckHalfH * 2, 3);
-    this.bodyGraphics.lineStyle(1, 0x60a5fa, 0.7);
-    this.bodyGraphics.strokeRoundedRect(-deckHalfW, -deckHalfH, deckHalfW * 2, deckHalfH * 2, 3);
 
-    // 4. Front Sensor Module & Bumper (Facing forward along +X East)
+    // Tech PCB Circuit Traces on deck
+    this.bodyGraphics.lineStyle(1, 0x0284c7, 0.45);
+    this.bodyGraphics.lineBetween(-deckHalfW + 3, -deckHalfH + 4, deckHalfW - 3, -deckHalfH + 4);
+    this.bodyGraphics.lineBetween(-deckHalfW + 3, deckHalfH - 4, deckHalfW - 3, deckHalfH - 4);
+    this.bodyGraphics.lineBetween(-deckHalfW + 6, 0, deckHalfW - 6, 0);
+
+    // Tinted Protective Polycarbonate Canopy over electronics core
+    this.bodyGraphics.fillStyle(0x1e3a8a, 0.4);
+    this.bodyGraphics.fillRoundedRect(-deckHalfW + 2, -deckHalfH + 2, (deckHalfW - 2) * 2, (deckHalfH - 2) * 2, 2);
+    this.bodyGraphics.lineStyle(1, 0x38bdf8, 0.6);
+    this.bodyGraphics.strokeRoundedRect(-deckHalfW + 2, -deckHalfH + 2, (deckHalfW - 2) * 2, (deckHalfH - 2) * 2, 2);
+
+    // 4. Front Bumper & Dual Ultrasonic / Optical Eyes (Facing East +X)
     this.sensorGraphics.clear();
-    const bumperStartX = hullHalfW - 2;
-    const bumperW = r * 0.38;
-    const bumperH = r * 1.1;
+    const bumperStartX = hullHalfW - 1;
+    const bumperW = r * 0.35;
+    const bumperH = r * 1.12;
 
-    // Front bumper plate
-    this.sensorGraphics.fillStyle(0x334155, 1);
+    // Heavy-duty spring-loaded crash bumper plate
+    this.sensorGraphics.fillStyle(0x1e293b, 1);
     this.sensorGraphics.fillRoundedRect(bumperStartX, -bumperH / 2, bumperW, bumperH, 3);
     this.sensorGraphics.lineStyle(1.5, 0x0f172a, 1);
     this.sensorGraphics.strokeRoundedRect(bumperStartX, -bumperH / 2, bumperW, bumperH, 3);
 
-    // Front Optical Eye / Visor Strip (Cyan LED Scanner lens)
-    const lensX = bumperStartX + 2;
-    const lensW = bumperW - 3;
-    const lensH = bumperH * 0.65;
-    this.sensorGraphics.fillStyle(this.config.sensorLedColor, 1);
-    this.sensorGraphics.fillRoundedRect(lensX, -lensH / 2, lensW, lensH, 2);
+    // Rubber shock pads on front bumper
+    this.sensorGraphics.fillStyle(0x475569, 1);
+    this.sensorGraphics.fillRect(bumperStartX + bumperW - 1.5, -bumperH * 0.4, 2, bumperH * 0.8);
 
-    // Specular gleam on scanner lens
-    this.sensorGraphics.fillStyle(0xffffff, 0.9);
-    this.sensorGraphics.fillCircle(lensX + lensW * 0.5, -lensH * 0.2, 1.5);
+    // Dual Ultrasonic Transducer / Stereo Optical Eyes
+    const eyeRadius = 3.2;
+    const eyeX = bumperStartX + 2;
+    const eyeYTop = -r * 0.32;
+    const eyeYBottom = r * 0.32;
 
-    // 5. Direction Orientation Chevron Arrow (centered on hood pointing along +X)
-    this.sensorGraphics.fillStyle(0xfacc15, 1); // Amber gold heading arrow
+    for (const eyeY of [eyeYTop, eyeYBottom]) {
+      // Chrome eye barrel
+      this.sensorGraphics.fillStyle(0x64748b, 1);
+      this.sensorGraphics.fillCircle(eyeX, eyeY, eyeRadius);
+      this.sensorGraphics.lineStyle(1, 0x0f172a, 1);
+      this.sensorGraphics.strokeCircle(eyeX, eyeY, eyeRadius);
+
+      // Optical glass lens (Cyan sensor eye)
+      this.sensorGraphics.fillStyle(this.config.sensorLedColor, 1);
+      this.sensorGraphics.fillCircle(eyeX, eyeY, eyeRadius - 1);
+
+      // Specular gleam on glass lens
+      this.sensorGraphics.fillStyle(0xffffff, 0.9);
+      this.sensorGraphics.fillCircle(eyeX + 1, eyeY - 1, 1);
+    }
+
+    // Forward LED Headlight beams (soft warm white guide lights)
+    this.sensorGraphics.fillStyle(0xfef08a, 0.8);
+    this.sensorGraphics.fillCircle(bumperStartX + bumperW - 1, -bumperH * 0.42, 1.5);
+    this.sensorGraphics.fillCircle(bumperStartX + bumperW - 1, bumperH * 0.42, 1.5);
+
+    // 5. Direction Orientation Chevron Arrow (centered on front hood pointing along +X)
+    this.sensorGraphics.fillStyle(0xfacc15, 1); // Vibrant gold direction arrow
     this.sensorGraphics.beginPath();
-    this.sensorGraphics.moveTo(r * 0.35, 0);
-    this.sensorGraphics.lineTo(-r * 0.15, -r * 0.3);
-    this.sensorGraphics.lineTo(-r * 0.02, 0);
-    this.sensorGraphics.lineTo(-r * 0.15, r * 0.3);
+    this.sensorGraphics.moveTo(r * 0.38, 0);
+    this.sensorGraphics.lineTo(-r * 0.12, -r * 0.28);
+    this.sensorGraphics.lineTo(0, 0);
+    this.sensorGraphics.lineTo(-r * 0.12, r * 0.28);
     this.sensorGraphics.closePath();
     this.sensorGraphics.fillPath();
 
-    // 6. Center Status LED
+    // 6. Dual Rear Telemetry Indicator LEDs (Green Power & Amber Link)
+    const rearX = -hullHalfW + 2.5;
+    this.sensorGraphics.fillStyle(0x22c55e, 1); // Power ON (Green)
+    this.sensorGraphics.fillCircle(rearX, -r * 0.35, 1.6);
+    this.sensorGraphics.fillStyle(0xf59e0b, 1); // Data Link (Amber)
+    this.sensorGraphics.fillCircle(rearX, r * 0.35, 1.6);
+
+    // 7. Center 360° LiDAR Turret / Status Core
     this.drawLedPulse(1.0);
   }
 
   /**
-   * Draws the two side tracks / wheels with distance-synchronized tread lugs and wheel hubs.
-   * Symmetrically placed on top (-Y) and bottom (+Y) of the chassis.
+   * Draws 4 independent heavy-duty all-terrain wheels with real rubber tire treads,
+   * alloy rims, and center hex axle hubcaps that rotate strictly in accordance with
+   * actual traveled distance.
    */
   private drawWheels(): void {
     const r = this.config.radius;
-    const trackHalfLength = r * 1.05;
-    const trackWidth = 6;
-    const trackYTop = -r - 2;
-    const trackYBottom = r - 4;
+    const wheelHalfLength = r * 0.46; // ~7.5px half length (15px total length)
+    const wheelWidth = 6;
+    const xOffsets = [-r * 0.52, r * 0.52]; // Rear axle (-X) and Front axle (+X)
+    const yTireTops = [-r - 3, r - 3];      // Left tires (-Y) and Right tires (+Y)
 
     this.wheelsGraphics.clear();
 
-    // Top and Bottom Tracks (symmetrical about Y = 0)
-    for (const yPos of [trackYTop, trackYBottom]) {
-      const centerY = yPos + trackWidth / 2;
+    for (const xCenter of xOffsets) {
+      for (const yTop of yTireTops) {
+        const yCenter = yTop + wheelWidth / 2;
+        const xStart = xCenter - wheelHalfLength;
+        const xEnd = xCenter + wheelHalfLength;
 
-      // Track casing / rim
-      this.wheelsGraphics.fillStyle(this.config.accentColor, 1);
-      this.wheelsGraphics.fillRoundedRect(-trackHalfLength, yPos, trackHalfLength * 2, trackWidth, 2);
-      this.wheelsGraphics.lineStyle(1, 0x475569, 1);
-      this.wheelsGraphics.strokeRoundedRect(-trackHalfLength, yPos, trackHalfLength * 2, trackWidth, 2);
+        // Vulcanized heavy-duty rubber tire casing
+        this.wheelsGraphics.fillStyle(this.config.accentColor, 1);
+        this.wheelsGraphics.fillRoundedRect(xStart, yTop, wheelHalfLength * 2, wheelWidth, 2.5);
 
-      // Sprocket / Pulley hubs at both ends
-      const hubRadius = 2.2;
-      this.wheelsGraphics.fillStyle(0x64748b, 1);
-      this.wheelsGraphics.fillCircle(-trackHalfLength + 3, centerY, hubRadius);
-      this.wheelsGraphics.fillCircle(trackHalfLength - 3, centerY, hubRadius);
-      this.wheelsGraphics.fillStyle(0x0f172a, 1);
-      this.wheelsGraphics.fillCircle(-trackHalfLength + 3, centerY, 1);
-      this.wheelsGraphics.fillCircle(trackHalfLength - 3, centerY, 1);
+        // Tire tread perimeter line
+        this.wheelsGraphics.lineStyle(1, 0x0f172a, 1);
+        this.wheelsGraphics.strokeRoundedRect(xStart, yTop, wheelHalfLength * 2, wheelWidth, 2.5);
 
-      // Animated wheel treads / ribs moving along X axis according to wheelTreadOffset
-      this.wheelsGraphics.lineStyle(1.2, 0x94a3b8, 0.95);
-      const spacing = 5;
-      const offset = ((this.wheelTreadOffset % spacing) + spacing) % spacing;
+        // Alloy wheel rim bed (slate titanium)
+        this.wheelsGraphics.fillStyle(0x475569, 1);
+        this.wheelsGraphics.fillRoundedRect(xStart + 2, yTop + 1, (wheelHalfLength - 2) * 2, wheelWidth - 2, 1.5);
 
-      for (let x = -trackHalfLength + 4 + offset; x < trackHalfLength - 3; x += spacing) {
-        this.wheelsGraphics.lineBetween(x, yPos + 1, x, yPos + trackWidth - 1);
+        // Center wheel axle hub & stainless hex nut
+        this.wheelsGraphics.fillStyle(0x94a3b8, 1);
+        this.wheelsGraphics.fillCircle(xCenter, yCenter, 2.0);
+        this.wheelsGraphics.fillStyle(0x0f172a, 1);
+        this.wheelsGraphics.fillCircle(xCenter, yCenter, 1.0);
+
+        // Dynamic rubber tread lugs moving along X axis according to physical distance
+        this.wheelsGraphics.lineStyle(1.2, 0x94a3b8, 0.9);
+        const spacing = 4.5;
+        const offset = ((this.wheelTreadOffset % spacing) + spacing) % spacing;
+
+        for (let lx = xStart + 2.5 + offset; lx < xEnd - 2; lx += spacing) {
+          this.wheelsGraphics.lineBetween(lx, yTop + 0.5, lx, yTop + wheelWidth - 0.5);
+        }
       }
     }
   }
 
   /**
-   * Draws the subtle pulsating status LED on the robot roof.
+   * Draws the center 360° LiDAR optical turret & status pulse on the robot roof.
    */
   public drawLedPulse(intensity: number = 1.0): void {
     this.ledGraphics.clear();
     const r = this.config.radius;
-    const ledX = -r * 0.25;
-    const ledY = 0;
+    const turretX = -r * 0.15;
+    const turretY = 0;
 
-    // Soft aura
-    this.ledGraphics.fillStyle(0x38bdf8, 0.25 * intensity);
-    this.ledGraphics.fillCircle(ledX, ledY, 4.5);
+    // Turret housing ring
+    this.ledGraphics.fillStyle(0x1e293b, 1);
+    this.ledGraphics.fillCircle(turretX, turretY, 5.0);
+    this.ledGraphics.lineStyle(1, 0x475569, 1);
+    this.ledGraphics.strokeCircle(turretX, turretY, 5.0);
 
-    // Center jewel
-    this.ledGraphics.fillStyle(0x38bdf8, 0.9 * intensity);
-    this.ledGraphics.fillCircle(ledX, ledY, 2.2);
+    // Cyan LiDAR optic aura
+    this.ledGraphics.fillStyle(0x38bdf8, 0.3 * intensity);
+    this.ledGraphics.fillCircle(turretX, turretY, 4.0);
 
+    // Center laser scanner jewel
+    this.ledGraphics.fillStyle(0x38bdf8, 0.95 * intensity);
+    this.ledGraphics.fillCircle(turretX, turretY, 2.2);
+
+    // Optical specular glass gleam
     this.ledGraphics.fillStyle(0xffffff, 0.95);
-    this.ledGraphics.fillCircle(ledX - 0.5, ledY - 0.5, 0.8);
+    this.ledGraphics.fillCircle(turretX - 0.6, turretY - 0.6, 0.9);
   }
 
   public destroy(): void {

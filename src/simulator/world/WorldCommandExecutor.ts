@@ -44,9 +44,20 @@ export interface WorldMovementConfig {
   turnAngleRad: number;
   /** Margin from world canvas boundary to keep robot visually inside borders */
   boundaryMargin: number;
-  /** Base movement animation duration in ms at 50% motor speed */
+  /**
+   * Authoritative linear movement speed in world pixels per second at 50% motor speed.
+   * Calibrated for educational robotics observation: 80 px/sec allows clear visual
+   * perception of wheel rotation, heading, and collision approach (~813ms for 65px).
+   */
+  moveSpeedPxPerSec: number;
+  /**
+   * Authoritative angular turning speed in degrees per second at 50% motor speed.
+   * Calibrated for educational robotics observation: 135 deg/sec (~667ms for 90° turn).
+   */
+  turnSpeedDegPerSec: number;
+  /** Base movement animation duration in ms at 50% motor speed (derived: moveDistance / moveSpeedPxPerSec * 1000) */
   baseMoveDurationMs: number;
-  /** Base turn animation duration in ms at 50% motor speed */
+  /** Base turn animation duration in ms at 50% motor speed (derived: 90 / turnSpeedDegPerSec * 1000) */
   baseTurnDurationMs: number;
 }
 
@@ -54,25 +65,55 @@ export const DEFAULT_WORLD_MOVEMENT_CONFIG: WorldMovementConfig = {
   moveDistance: 65,
   turnAngleRad: Math.PI / 2,
   boundaryMargin: 16,
-  baseMoveDurationMs: 280,
-  baseTurnDurationMs: 200,
+  moveSpeedPxPerSec: 80,
+  turnSpeedDegPerSec: 135,
+  baseMoveDurationMs: 813,  // 65px / 80px/s * 1000 = ~813ms
+  baseTurnDurationMs: 667,  // 90° / 135°/s * 1000 = ~667ms
 };
 
 /**
- * Calculates deterministic animation duration in milliseconds based on motor speed (1-100%).
- * 50% speed -> baseDuration (e.g. 280ms move, 200ms turn)
- * 100% speed -> 0.5x duration (e.g. 140ms move, 100ms turn)
- * 20% speed -> 2.5x duration (e.g. 700ms move, 500ms turn)
+ * Calculates deterministic animation duration in milliseconds based on physical speed:
+ * duration = (distance / speed) * 1000.
+ *
+ * Scaled by motor speed setting (10% - 100%, 50% is 1.0x factor).
+ *
+ * @param motorSpeedSetting Motor power setting (10 to 100, default: 50)
+ * @param isTurn Whether this step is an angular turn (true) or linear translation (false)
+ * @param distanceOrAngle Optional actual distance (px) or turn angle (deg). If omitted, uses default command step.
+ * @param config World movement configuration
  */
 export function calculateStepDurationMs(
   motorSpeedSetting: number = 50,
   isTurn: boolean = false,
-  config: WorldMovementConfig = DEFAULT_WORLD_MOVEMENT_CONFIG,
+  distanceOrAngleOrConfig?: number | WorldMovementConfig,
+  config?: WorldMovementConfig,
 ): number {
-  const base = isTurn ? config.baseTurnDurationMs : config.baseMoveDurationMs;
+  let activeConfig = DEFAULT_WORLD_MOVEMENT_CONFIG;
+  let activeDistOrAngle: number | undefined = undefined;
+
+  if (typeof distanceOrAngleOrConfig === 'object' && distanceOrAngleOrConfig !== null) {
+    activeConfig = distanceOrAngleOrConfig;
+  } else {
+    activeDistOrAngle = distanceOrAngleOrConfig;
+    if (config) {
+      activeConfig = config;
+    }
+  }
+
   const clampedSpeed = Math.max(10, Math.min(100, motorSpeedSetting));
-  const factor = 50 / clampedSpeed;
-  return Math.round(Math.max(100, Math.min(800, base * factor)));
+  const speedMultiplier = clampedSpeed / 50;
+
+  if (isTurn) {
+    const angleDeg = activeDistOrAngle !== undefined ? Math.abs(activeDistOrAngle) : 90;
+    const effectiveTurnSpeed = Math.max(20, activeConfig.turnSpeedDegPerSec * speedMultiplier);
+    const duration = (angleDeg / effectiveTurnSpeed) * 1000;
+    return Math.round(Math.max(150, Math.min(2500, duration)));
+  } else {
+    const distancePx = activeDistOrAngle !== undefined ? Math.abs(activeDistOrAngle) : activeConfig.moveDistance;
+    const effectiveMoveSpeed = Math.max(15, activeConfig.moveSpeedPxPerSec * speedMultiplier);
+    const duration = (distancePx / effectiveMoveSpeed) * 1000;
+    return Math.round(Math.max(100, Math.min(3000, duration)));
+  }
 }
 
 export type WorldExecutionFailureReason =
@@ -150,6 +191,16 @@ export class WorldCommandExecutor {
 
   public getMovementConfig(): WorldMovementConfig {
     return this.config;
+  }
+
+  public setMoveSpeed(speedPxPerSec: number): void {
+    this.config.moveSpeedPxPerSec = Math.max(10, speedPxPerSec);
+    this.config.baseMoveDurationMs = Math.round((this.config.moveDistance / this.config.moveSpeedPxPerSec) * 1000);
+  }
+
+  public setTurnSpeed(speedDegPerSec: number): void {
+    this.config.turnSpeedDegPerSec = Math.max(15, speedDegPerSec);
+    this.config.baseTurnDurationMs = Math.round((90 / this.config.turnSpeedDegPerSec) * 1000);
   }
 
   public getAdapter(): WorldRobotAdapter {
