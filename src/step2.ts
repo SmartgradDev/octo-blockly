@@ -1021,4 +1021,14 @@ if (typeof window !== 'undefined') {
     phaserSimulator?.setDebugMissionObjectsOverlay(enabled);
     return enabled;
   };
+  (window as any).__step2SetAnimationDebug = (enabled: boolean) => {
+    phaserSimulator?.setAnimationDebug(enabled);
+    return enabled;
+  };
+  (window as any).__step2GetAnimationState = () => {
+    return phaserSimulator?.getAnimationState() || 'IDLE';
+  };
+  (window as any).__step2IsAnimationDebugEnabled = () => {
+    return phaserSimulator?.isAnimationDebugEnabled() || false;
+  };
 }

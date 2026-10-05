@@ -250,6 +250,18 @@ export class PhaserGridRenderer implements GridCoordinateConverter {
     this.robotRenderer.stopVisuals(snapToTarget);
   }
 
+  public setAnimationDebug(enabled: boolean): void {
+    this.robotRenderer.setAnimationDebug(enabled);
+  }
+
+  public isAnimationDebugEnabled(): boolean {
+    return this.robotRenderer.isAnimationDebugEnabled();
+  }
+
+  public getAnimationState(): string {
+    return this.robotRenderer.getAnimationController().getState();
+  }
+
   public destroy(): void {
     this.backgroundGraphics.destroy();
     this.cellsGraphics.destroy();

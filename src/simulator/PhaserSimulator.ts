@@ -93,6 +93,18 @@ export class PhaserSimulator {
     this.scene?.stopVisuals(snapToTarget);
   }
 
+  public setAnimationDebug(enabled: boolean): void {
+    this.scene?.setAnimationDebug(enabled);
+  }
+
+  public isAnimationDebugEnabled(): boolean {
+    return this.scene ? this.scene.isAnimationDebugEnabled() : false;
+  }
+
+  public getAnimationState(): string {
+    return this.scene ? this.scene.getAnimationState() : 'IDLE';
+  }
+
   public setDebugRoadOverlay(enabled: boolean): void {
     this.scene?.setDebugRoadOverlay(enabled);
   }

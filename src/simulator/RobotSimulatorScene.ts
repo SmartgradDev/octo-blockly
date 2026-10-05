@@ -94,6 +94,18 @@ export class RobotSimulatorScene extends Phaser.Scene {
     this.gridRenderer?.stopVisuals(snapToTarget);
   }
 
+  public setAnimationDebug(enabled: boolean): void {
+    this.gridRenderer?.setAnimationDebug(enabled);
+  }
+
+  public isAnimationDebugEnabled(): boolean {
+    return this.gridRenderer ? this.gridRenderer.isAnimationDebugEnabled() : false;
+  }
+
+  public getAnimationState(): string {
+    return this.gridRenderer ? this.gridRenderer.getAnimationState() : 'IDLE';
+  }
+
   public setDebugRoadOverlay(enabled: boolean): void {
     if (this.worldRenderer) {
       this.worldRenderer.setDebugRoadOverlay(enabled);

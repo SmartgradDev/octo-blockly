@@ -1,3 +1,4 @@
+export * from './RobotAnimationController';
 export * from './RobotRenderer';
 export * from './PhaserGridRenderer';
 export * from './RobotSimulatorScene';

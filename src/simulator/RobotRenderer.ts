@@ -19,6 +19,10 @@
 
 import * as Phaser from 'phaser';
 import {Direction, RobotState} from '../robot/RobotState';
+import {
+  RobotAnimationController,
+  RobotAnimationState,
+} from './RobotAnimationController';
 
 export interface WorldRobotPose {
   /** Continuous world X coordinate (pixels/world units) */
@@ -52,9 +56,7 @@ export const DEFAULT_ROBOT_RENDERER_CONFIG: RobotRendererConfig = {
 export class RobotRenderer {
   private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
-  private bodyGraphics: Phaser.GameObjects.Graphics;
-  private pointerGraphics: Phaser.GameObjects.Graphics;
-  private directionBadge: Phaser.GameObjects.Text;
+  private animController: RobotAnimationController;
   private coordinateConverter?: GridCoordinateConverter;
   private config: RobotRendererConfig;
 
@@ -78,23 +80,22 @@ export class RobotRenderer {
     // Create container for grouping all robot sub-elements (depth 100 on top of world layers)
     this.container = this.scene.add.container(0, 0).setDepth(100);
 
-    // Body graphics (chassis, visor, treads/pads)
-    this.bodyGraphics = this.scene.add.graphics();
-    this.container.add(this.bodyGraphics);
-
-    // Pointer graphics (directional front arrow pointing along local +X)
-    this.pointerGraphics = this.scene.add.graphics();
-    this.container.add(this.pointerGraphics);
-
-    // Direction symbol badge
-    this.directionBadge = this.scene.add.text(0, 0, '▶', {
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      fontSize: '11px',
-      color: '#ffffff',
-      fontStyle: 'bold',
+    // Dedicated RobotAnimationController managing visual components & states
+    this.animController = new RobotAnimationController(this.scene, this.container, {
+      radius: this.config.robotRadius,
     });
-    this.directionBadge.setOrigin(0.5, 0.5);
-    this.container.add(this.directionBadge);
+  }
+
+  public getAnimationController(): RobotAnimationController {
+    return this.animController;
+  }
+
+  public setAnimationDebug(enabled: boolean): void {
+    this.animController.setDebugOverlay(enabled);
+  }
+
+  public isAnimationDebugEnabled(): boolean {
+    return this.animController.isDebugOverlayEnabled();
   }
 
   /**
@@ -213,17 +214,24 @@ export class RobotRenderer {
     if (this.activeTurnTween && this.activeTurnTween.isPlaying()) {
       this.activeTurnTween.pause();
     }
+    this.animController.setState('PAUSED');
   }
 
   /**
    * Resumes active visual tweens safely.
    */
   public resumeVisuals(): void {
+    let hasRunningTween = false;
     if (this.activeMoveTween && this.activeMoveTween.isPaused()) {
       this.activeMoveTween.resume();
+      hasRunningTween = true;
     }
     if (this.activeTurnTween && this.activeTurnTween.isPaused()) {
       this.activeTurnTween.resume();
+      hasRunningTween = true;
+    }
+    if (!hasRunningTween) {
+      this.animController.setState('IDLE');
     }
   }
 
@@ -233,6 +241,7 @@ export class RobotRenderer {
   public stopVisuals(snapToTarget: boolean = true): void {
     this.stopMovementTween(snapToTarget);
     this.stopTurnTween(snapToTarget);
+    this.animController.setState('STOPPED');
     this.notifyPendingResolved();
   }
 
@@ -303,6 +312,7 @@ export class RobotRenderer {
       this.container.setRotation(targetAngle);
       this.lastTargetAngle = targetAngle;
       this.isInitialized = true;
+      this.animController.setState('IDLE');
       if (onProgress) {
         onProgress({x: targetX, y: targetY, rotation: targetAngle});
       }
@@ -312,9 +322,10 @@ export class RobotRenderer {
     // ── Position Handling ──────────────────────────────────────────────
     const currentX = this.container.x;
     const currentY = this.container.y;
-    const dx = Math.abs(currentX - targetX);
-    const dy = Math.abs(currentY - targetY);
-    const hasMoved = dx > 0.5 || dy > 0.5;
+    const rawDx = targetX - currentX;
+    const rawDy = targetY - currentY;
+    const distSq = rawDx * rawDx + rawDy * rawDy;
+    const hasMoved = distSq > 0.25;
 
     // ── Rotation Handling ──────────────────────────────────────────────
     const hasTurned =
@@ -322,6 +333,7 @@ export class RobotRenderer {
       Math.abs(this.getShortestAngleDelta(this.lastTargetAngle, targetAngle)) > 0.001;
 
     if (!hasMoved && !hasTurned) {
+      this.animController.setState('IDLE');
       if (onProgress) {
         onProgress({x: currentX, y: currentY, rotation: this.container.rotation});
       }
@@ -335,6 +347,13 @@ export class RobotRenderer {
     if (hasTurned) {
       this.stopTurnTween(false);
     }
+
+    // Determine movement direction (forward vs backward) relative to heading
+    const currentRot = this.container.rotation;
+    const headingX = Math.cos(currentRot);
+    const headingY = Math.sin(currentRot);
+    const dot = rawDx * headingX + rawDy * headingY;
+    const moveAnimState: RobotAnimationState = dot >= -0.001 ? 'MOVING_FORWARD' : 'MOVING_BACKWARD';
 
     return new Promise<void>((resolve) => {
       let pendingAnimations = 0;
@@ -351,13 +370,16 @@ export class RobotRenderer {
       if (hasMoved) {
         pendingAnimations++;
         const moveDur = durationMs !== undefined ? durationMs : this.config.moveDurationMs;
+        this.animController.setState(moveAnimState);
         this.activeMoveTween = this.scene.tweens.add({
           targets: this.container,
           x: targetX,
           y: targetY,
           duration: moveDur,
           ease: 'Cubic.easeOut',
-          onUpdate: () => {
+          onUpdate: (tween: any) => {
+            const progress = tween?.progress ?? 0;
+            this.animController.onStepProgress(moveAnimState, progress);
             if (onProgress) {
               onProgress({
                 x: this.container.x,
@@ -368,6 +390,9 @@ export class RobotRenderer {
           },
           onComplete: () => {
             this.activeMoveTween = null;
+            if (!this.activeTurnTween) {
+              this.animController.setState('IDLE');
+            }
             onAnimFinished();
           },
         });
@@ -376,6 +401,9 @@ export class RobotRenderer {
       if (hasTurned) {
         pendingAnimations++;
         this.lastTargetAngle = targetAngle;
+        if (!hasMoved) {
+          this.animController.setState('TURNING');
+        }
 
         const currentRotation = this.container.rotation;
         const angleDelta = this.getShortestAngleDelta(currentRotation, targetAngle);
@@ -387,7 +415,11 @@ export class RobotRenderer {
           rotation: destinationAngle,
           duration: turnDur,
           ease: 'Cubic.easeOut',
-          onUpdate: () => {
+          onUpdate: (tween: any) => {
+            const progress = tween?.progress ?? 0;
+            if (!hasMoved) {
+              this.animController.onStepProgress('TURNING', progress);
+            }
             if (onProgress) {
               onProgress({
                 x: this.container.x,
@@ -405,12 +437,16 @@ export class RobotRenderer {
             else if (norm <= -Math.PI) norm += twoPi;
             this.container.setRotation(norm);
             this.lastTargetAngle = norm;
+            if (!this.activeMoveTween) {
+              this.animController.setState('IDLE');
+            }
             onAnimFinished();
           },
         });
       }
 
       if (pendingAnimations === 0) {
+        this.animController.setState('IDLE');
         this.pendingResolvers.delete(resolve);
         resolve();
       }
@@ -440,6 +476,7 @@ export class RobotRenderer {
   public reset(pose: WorldRobotPose | RobotState): Promise<void> {
     this.stopMovementTween(false);
     this.stopTurnTween(false);
+    this.animController.resetVisualState();
     if ('rotation' in pose) {
       return this.renderWorld(pose, true);
     } else {
@@ -448,68 +485,10 @@ export class RobotRenderer {
   }
 
   /**
-   * Draws robot visual shape in local container space facing East (+X axis).
-   * Rotation of the container then orientates the robot seamlessly without angular offset.
+   * Updates robot visual radius in local container space.
    */
   private drawRobotGraphics(radius: number): void {
-    this.bodyGraphics.clear();
-    this.pointerGraphics.clear();
-
-    // 1. Robot chassis / contact shadow
-    this.bodyGraphics.fillStyle(0x1e3a8a, 0.25);
-    this.bodyGraphics.fillCircle(0, 2, radius + 1);
-
-    // 2. Robot body (cheerful robotic blue)
-    this.bodyGraphics.fillStyle(0x2563eb, 1);
-    this.bodyGraphics.fillCircle(0, 0, radius);
-
-    // 3. Robot chassis border
-    this.bodyGraphics.lineStyle(2, 0x1d4ed8, 1);
-    this.bodyGraphics.strokeCircle(0, 0, radius);
-
-    // 4. Robot visor / optical scanner (cyan) facing forward along +X
-    const visorSpanY = radius * 1.1;
-    const visorThicknessX = radius * 0.55;
-    this.bodyGraphics.fillStyle(0x67e8f9, 1);
-    this.bodyGraphics.fillRoundedRect(
-      radius * 0.15,
-      -visorSpanY / 2,
-      visorThicknessX,
-      visorSpanY,
-      3,
-    );
-
-    // 5. Visor inner border
-    this.bodyGraphics.lineStyle(1, 0x06b6d4, 0.8);
-    this.bodyGraphics.strokeRoundedRect(
-      radius * 0.15,
-      -visorSpanY / 2,
-      visorThicknessX,
-      visorSpanY,
-      3,
-    );
-
-    // 6. Directional Front Pointer (amber orientation triangle pointing along +X)
-    const tipDistance = radius + 6;
-    const baseDistance = radius - 2;
-    const halfWidth = 5;
-
-    this.pointerGraphics.fillStyle(0xf59e0b, 1);
-    this.pointerGraphics.fillTriangle(
-      tipDistance, 0,
-      baseDistance, -halfWidth,
-      baseDistance, halfWidth,
-    );
-    this.pointerGraphics.lineStyle(1.5, 0xd97706, 1);
-    this.pointerGraphics.strokeTriangle(
-      tipDistance, 0,
-      baseDistance, -halfWidth,
-      baseDistance, halfWidth,
-    );
-
-    // 7. Direction Symbol Badge
-    this.directionBadge.setText('▶');
-    this.directionBadge.setPosition(-radius * 0.25, 0);
+    this.animController.setRadius(radius);
   }
 
   public setVisible(visible: boolean): void {
@@ -520,6 +499,7 @@ export class RobotRenderer {
     this.stopMovementTween(false);
     this.stopTurnTween(false);
     this.notifyPendingResolved();
+    this.animController.destroy();
     this.container.destroy(true);
   }
 }
