@@ -29,8 +29,24 @@ export type MissionObjectType =
   | 'GOAL'
   | string;
 
+export type FoodClassification = 'HEALTHY' | 'UNHEALTHY';
+
+export interface FoodMetadata {
+  category: 'FOOD';
+  foodClassification: FoodClassification;
+  name?: string;
+  points?: number;
+  [key: string]: unknown;
+}
+
+export type InteractionSemanticType =
+  | 'COLLECTED'
+  | 'HAZARD_CONTACT'
+  | 'ACTIVATED'
+  | 'TRIGGERED';
+
 export interface WorldMissionObject {
-  /** Stable unique identifier (e.g. 'gem_campus_1') */
+  /** Stable unique identifier (e.g. 'gem_campus_1', 'food_apple_1') */
   id: string;
   /** Generic object type classification (default: 'COLLECTIBLE') */
   type: MissionObjectType;
@@ -48,7 +64,7 @@ export interface WorldMissionObject {
   label?: string;
   /** Optional color tint for procedural vector rendering (hex number) */
   color?: number;
-  /** Optional icon symbol or emoji (e.g. '💎', '📦', '⚡') */
+  /** Optional icon symbol or emoji (e.g. '💎', '📦', '⚡', '🍎', '🍔') */
   iconSymbol?: string;
   /** Extensible custom metadata payload for future mission types */
   metadata?: Record<string, unknown>;
@@ -64,5 +80,24 @@ export interface MissionObjectInteractionEvent {
   interactionPoint: Point2D;
   previousState: MissionObjectState;
   newState: MissionObjectState;
+  /** Semantic type of the interaction (e.g. 'COLLECTED' for healthy/gems, 'HAZARD_CONTACT' for unhealthy) */
+  semanticType?: InteractionSemanticType;
+  /** If this is a food object, its classification */
+  foodClassification?: FoodClassification;
+}
+
+/** Helper to test if an object is classified as food */
+export function isFoodObject(obj: WorldMissionObject): boolean {
+  if (obj.metadata && obj.metadata.category === 'FOOD') return true;
+  if (obj.metadata && obj.metadata.foodClassification !== undefined) return true;
+  return obj.type === 'FOOD';
+}
+
+/** Helper to retrieve food classification from structured metadata */
+export function getFoodClassification(obj: WorldMissionObject): FoodClassification | undefined {
+  if (obj.metadata && (obj.metadata.foodClassification === 'HEALTHY' || obj.metadata.foodClassification === 'UNHEALTHY')) {
+    return obj.metadata.foodClassification as FoodClassification;
+  }
+  return undefined;
 }
 

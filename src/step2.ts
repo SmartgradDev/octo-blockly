@@ -21,6 +21,7 @@ import {PhaserSimulator, PhaserSimulationBridge} from './simulator';
 import {WorldRobotPose} from './simulator/RobotRenderer';
 import {
   CAMPUS_TOWN_MAP,
+  CAMPUS_NUTRITION_MAP,
   WorldRobotState,
   createWorldRobotState,
   WorldCommandExecutor,
@@ -78,7 +79,7 @@ const robot = createRobotState(
 );
 
 // ── Step 2 Continuous World Robot State & Command Executor ──────────
-const activeWorldMap = CAMPUS_TOWN_MAP;
+let activeWorldMap = CAMPUS_TOWN_MAP;
 const worldRobot: WorldRobotState = createWorldRobotState(
   activeWorldMap.spawnPoint.position.x,
   activeWorldMap.spawnPoint.position.y,
@@ -401,6 +402,14 @@ const loadMission = (mission: Mission) => {
     });
   }
 
+  // Select world map if mission specifies a dedicated preset
+  if (mission.worldMapId === 'campus_nutrition') {
+    activeWorldMap = CAMPUS_NUTRITION_MAP;
+  } else {
+    activeWorldMap = CAMPUS_TOWN_MAP;
+  }
+  worldCommandExecutor.setWorldMap(activeWorldMap);
+
   worldCommandExecutor.getAdapter().resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
   const activePolicy =
     mission.movementPolicy || activeWorldMap.movementPolicy || 'FREE_WORLD';
@@ -424,6 +433,9 @@ const loadMission = (mission: Mission) => {
     );
     worldCommandExecutor.setMissionObjects(missionObjects);
     phaserSimulator?.updateMissionObjects(missionObjects);
+  } else if (mission.missionObjects && mission.missionObjects.length > 0) {
+    worldCommandExecutor.setMissionObjects(mission.missionObjects);
+    phaserSimulator?.updateMissionObjects(mission.missionObjects);
   } else if (activeWorldMap.missionObjects && activeWorldMap.missionObjects.length > 0) {
     worldCommandExecutor.setMissionObjects(activeWorldMap.missionObjects);
     phaserSimulator?.updateMissionObjects(activeWorldMap.missionObjects);

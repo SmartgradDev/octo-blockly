@@ -223,3 +223,102 @@ export const CAMPUS_TOWN_MAP: WorldMapData = {
     rotation: 0,                   // Heading East (+X)
   },
 };
+
+/**
+ * CAMPUS_NUTRITION_MAP — Educational demonstration map for Healthy vs Unhealthy Food mission.
+ * Features:
+ * - 3 Healthy foods: Apple, Banana, Carrot (positive, collect)
+ * - 2 Unhealthy foods: Burger, Soda (hazards, avoid)
+ * - Clean layout along Campus Way towards the Science Plaza Goal
+ */
+export const CAMPUS_NUTRITION_MAP: WorldMapData = {
+  ...CAMPUS_TOWN_MAP,
+  id: 'campus_nutrition',
+  name: 'Campus Town — Healthy Nutrition',
+  description: 'Collect healthy food items and avoid unhealthy junk food to reach the goal!',
+  missionObjects: [
+    // Healthy Foods
+    {
+      id: 'food_apple',
+      type: 'FOOD',
+      x: 230,
+      y: 300,
+      interactionRadius: 18,
+      state: 'AVAILABLE',
+      color: 0x22c55e,
+      iconSymbol: '🍎',
+      label: 'Apple',
+      metadata: {
+        category: 'FOOD',
+        foodClassification: 'HEALTHY',
+        name: 'Fresh Apple',
+      },
+    },
+    {
+      id: 'food_banana',
+      type: 'FOOD',
+      x: 370,
+      y: 300,
+      interactionRadius: 18,
+      state: 'AVAILABLE',
+      color: 0x22c55e,
+      iconSymbol: '🍌',
+      label: 'Banana',
+      metadata: {
+        category: 'FOOD',
+        foodClassification: 'HEALTHY',
+        name: 'Ripe Banana',
+      },
+    },
+    {
+      id: 'food_carrot',
+      type: 'FOOD',
+      x: 520,
+      y: 300,
+      interactionRadius: 18,
+      state: 'AVAILABLE',
+      color: 0x22c55e,
+      iconSymbol: '🥕',
+      label: 'Carrot',
+      metadata: {
+        category: 'FOOD',
+        foodClassification: 'HEALTHY',
+        name: 'Crisp Carrot',
+      },
+    },
+
+    // Unhealthy Foods (placed off the direct center line to test steering or avoidance)
+    {
+      id: 'food_burger',
+      type: 'FOOD',
+      x: 300,
+      y: 320,
+      interactionRadius: 18,
+      state: 'AVAILABLE',
+      color: 0xf97316,
+      iconSymbol: '🍔',
+      label: 'Burger',
+      metadata: {
+        category: 'FOOD',
+        foodClassification: 'UNHEALTHY',
+        name: 'Greasy Burger',
+      },
+    },
+    {
+      id: 'food_soda',
+      type: 'FOOD',
+      x: 450,
+      y: 280,
+      interactionRadius: 18,
+      state: 'AVAILABLE',
+      color: 0xf97316,
+      iconSymbol: '🥤',
+      label: 'Soda',
+      metadata: {
+        category: 'FOOD',
+        foodClassification: 'UNHEALTHY',
+        name: 'Sugary Soda',
+      },
+    },
+  ],
+};

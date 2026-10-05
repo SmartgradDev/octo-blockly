@@ -20,6 +20,12 @@ export interface WorldMissionEvaluation {
   totalCollectibles?: number;
   collectedCount?: number;
   remainingCount?: number;
+  // Food specific metrics
+  totalHealthyFood?: number;
+  collectedHealthyFood?: number;
+  remainingHealthyFood?: number;
+  totalUnhealthyFood?: number;
+  encounteredUnhealthyFood?: number;
 }
 
 export function evaluateWorldMission(
@@ -29,15 +35,44 @@ export function evaluateWorldMission(
 ): WorldMissionEvaluation {
   const goal = worldMap.objectives.find((obj) => obj.type === 'GOAL');
 
-  // Evaluate mission collectibles if present
+  // Evaluate mission objects if system provided
   let totalCollectibles = 0;
   let collectedCount = 0;
   let remainingCount = 0;
   let hasCollectibles = false;
 
+  let totalHealthyFood = 0;
+  let collectedHealthyFood = 0;
+  let remainingHealthyFood = 0;
+  let totalUnhealthyFood = 0;
+  let encounteredUnhealthyFood = 0;
+  let hasFoodMission = false;
+
   if (missionObjectSystem) {
     const allObjects = missionObjectSystem.getObjects();
-    const collectibles = allObjects.filter((o) => o.type === 'COLLECTIBLE');
+
+    // 1. Food objects
+    const healthyFoods = missionObjectSystem.getHealthyFoodObjects();
+    const unhealthyFoods = missionObjectSystem.getUnhealthyFoodObjects();
+
+    if (healthyFoods.length > 0 || unhealthyFoods.length > 0) {
+      hasFoodMission = true;
+      totalHealthyFood = healthyFoods.length;
+      collectedHealthyFood = healthyFoods.filter((o) => o.state === 'COLLECTED').length;
+      remainingHealthyFood = totalHealthyFood - collectedHealthyFood;
+
+      totalUnhealthyFood = unhealthyFoods.length;
+      encounteredUnhealthyFood = unhealthyFoods.filter(
+        (o) => o.state === 'ACTIVATED' || o.state === 'COLLECTED',
+      ).length;
+    }
+
+    // 2. Generic Collectibles (non-food or gems)
+    const collectibles = allObjects.filter(
+      (o) =>
+        o.type === 'COLLECTIBLE' &&
+        !(o.metadata && o.metadata.category === 'FOOD'),
+    );
     if (collectibles.length > 0) {
       hasCollectibles = true;
       totalCollectibles = collectibles.length;
@@ -57,7 +92,104 @@ export function evaluateWorldMission(
     isAtGoal = distanceToGoal <= goalThreshold;
   }
 
-  // Case 1: Collectibles mission
+  // Case 1: Food mission (Healthy vs Unhealthy)
+  if (hasFoodMission) {
+    const allHealthyCollected = remainingHealthyFood === 0;
+    const avoidedAllUnhealthy = encounteredUnhealthyFood === 0;
+
+    const baseProgress = `Healthy: ${collectedHealthyFood}/${totalHealthyFood} | Avoided: ${totalUnhealthyFood - encounteredUnhealthyFood}/${totalUnhealthyFood}`;
+
+    if (goal) {
+      if (allHealthyCollected && isAtGoal) {
+        if (avoidedAllUnhealthy) {
+          return {
+            completed: true,
+            failed: false,
+            message: `🎉 Perfect Nutrition! All healthy food collected and all junk food avoided! Arrived at ${goal.name}.`,
+            progressText: `${baseProgress} | Goal reached!`,
+            distanceToGoal,
+            totalHealthyFood,
+            collectedHealthyFood,
+            remainingHealthyFood,
+            totalUnhealthyFood,
+            encounteredUnhealthyFood,
+          };
+        } else {
+          return {
+            completed: true,
+            failed: false,
+            message: `🎉 Healthy food collected! Reached ${goal.name} (with ${encounteredUnhealthyFood} unhealthy food hit).`,
+            progressText: `${baseProgress} | Goal reached!`,
+            distanceToGoal,
+            totalHealthyFood,
+            collectedHealthyFood,
+            remainingHealthyFood,
+            totalUnhealthyFood,
+            encounteredUnhealthyFood,
+          };
+        }
+      }
+
+      if (allHealthyCollected && !isAtGoal) {
+        return {
+          completed: false,
+          failed: false,
+          message: `All healthy food collected! Proceed to ${goal.name}.`,
+          progressText: `${baseProgress} | Head to goal (${distanceToGoal} px)`,
+          distanceToGoal,
+          totalHealthyFood,
+          collectedHealthyFood,
+          remainingHealthyFood,
+          totalUnhealthyFood,
+          encounteredUnhealthyFood,
+        };
+      }
+
+      return {
+        completed: false,
+        failed: false,
+        message: `Healthy: ${collectedHealthyFood}/${totalHealthyFood} (${remainingHealthyFood} left). Unhealthy encountered: ${encounteredUnhealthyFood}.`,
+        progressText: `${baseProgress} | Goal: ${distanceToGoal} px`,
+        distanceToGoal,
+        totalHealthyFood,
+        collectedHealthyFood,
+        remainingHealthyFood,
+        totalUnhealthyFood,
+        encounteredUnhealthyFood,
+      };
+    } else {
+      // Free food collection (no specific goal target)
+      if (allHealthyCollected) {
+        return {
+          completed: true,
+          failed: false,
+          message: avoidedAllUnhealthy
+            ? `🎉 All healthy food collected and avoided all unhealthy food!`
+            : `🎉 All healthy food collected! (Encountered ${encounteredUnhealthyFood} unhealthy food).`,
+          progressText: baseProgress,
+          totalHealthyFood,
+          collectedHealthyFood,
+          remainingHealthyFood: 0,
+          totalUnhealthyFood,
+          encounteredUnhealthyFood,
+        };
+      }
+
+      return {
+        completed: false,
+        failed: false,
+        message: `Collected ${collectedHealthyFood}/${totalHealthyFood} healthy food.`,
+        progressText: baseProgress,
+        totalHealthyFood,
+        collectedHealthyFood,
+        remainingHealthyFood,
+        totalUnhealthyFood,
+        encounteredUnhealthyFood,
+      };
+    }
+  }
+
+  // Case 2: Generic Collectibles mission (e.g. Gems)
   if (hasCollectibles) {
     const allCollected = remainingCount === 0;
 

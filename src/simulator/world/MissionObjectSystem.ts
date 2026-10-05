@@ -57,6 +57,28 @@ export class MissionObjectSystem {
     return Array.from(this.objects.values()).filter((o) => o.state === 'COLLECTED');
   }
 
+  public getHealthyFoodObjects(): WorldMissionObject[] {
+    return Array.from(this.objects.values()).filter(
+      (o) => o.metadata && o.metadata.category === 'FOOD' && o.metadata.foodClassification === 'HEALTHY',
+    );
+  }
+
+  public getUnhealthyFoodObjects(): WorldMissionObject[] {
+    return Array.from(this.objects.values()).filter(
+      (o) => o.metadata && o.metadata.category === 'FOOD' && o.metadata.foodClassification === 'UNHEALTHY',
+    );
+  }
+
+  public getEncounteredUnhealthyFoodObjects(): WorldMissionObject[] {
+    return Array.from(this.objects.values()).filter(
+      (o) =>
+        o.metadata &&
+        o.metadata.category === 'FOOD' &&
+        o.metadata.foodClassification === 'UNHEALTHY' &&
+        (o.state === 'ACTIVATED' || o.state === 'COLLECTED'),
+    );
+  }
+
   public addObject(obj: WorldMissionObject): void {
     const cloned = this.cloneObject(obj);
     this.objects.set(obj.id, cloned);
@@ -172,8 +194,28 @@ export class MissionObjectSystem {
       if (obj.state !== 'AVAILABLE') continue;
 
       const previousState = obj.state;
-      const newState: MissionObjectState =
-        obj.type === 'TRIGGER' ? 'ACTIVATED' : 'COLLECTED';
+      const isFood =
+        obj.type === 'FOOD' ||
+        (obj.metadata && obj.metadata.category === 'FOOD');
+      const foodClass =
+        obj.metadata && obj.metadata.foodClassification
+          ? (obj.metadata.foodClassification as 'HEALTHY' | 'UNHEALTHY')
+          : undefined;
+
+      let newState: MissionObjectState = 'COLLECTED';
+      let semanticType: import('./WorldMissionObject').InteractionSemanticType = 'COLLECTED';
+
+      if (isFood && foodClass === 'UNHEALTHY') {
+        // Unhealthy food acts as a mission hazard: triggers ACTIVATED state
+        newState = 'ACTIVATED';
+        semanticType = 'HAZARD_CONTACT';
+      } else if (obj.type === 'TRIGGER' || obj.type === 'HAZARD') {
+        newState = 'ACTIVATED';
+        semanticType = obj.type === 'HAZARD' ? 'HAZARD_CONTACT' : 'ACTIVATED';
+      } else {
+        newState = 'COLLECTED';
+        semanticType = 'COLLECTED';
+      }
 
       obj.state = newState;
 
@@ -185,6 +227,8 @@ export class MissionObjectSystem {
         interactionPoint: hit.point,
         previousState,
         newState,
+        semanticType,
+        foodClassification: foodClass,
       });
     }
 

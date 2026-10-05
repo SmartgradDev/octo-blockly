@@ -66,6 +66,8 @@ export interface Mission {
   concepts?: string[];
   phase: number;
   movementPolicy?: 'FREE_WORLD' | 'ROAD_ONLY' | 'RESTRICTED_ZONE';
+  worldMapId?: string;
+  missionObjects?: import('../simulator/world/WorldMissionObject').WorldMissionObject[];
 }
 
 export interface PhaseCategory {
@@ -383,6 +385,20 @@ export const PHASE_3_MISSIONS: Mission[] = [
     difficulty: 'EXPERT',
     concepts: ['action-limit', 'optimization', 'loops'],
     phase: 3,
+  },
+  {
+    id: 'healthy-food-19',
+    title: '19. Healthy Food Challenge',
+    description: 'Drive through Campus Town to collect all 3 healthy foods (🍎 Apple, 🍌 Banana, 🥕 Carrot) while steering clear of junk food hazards (🍔 Burger, 🥤 Soda) to reach the Science Plaza Goal!',
+    gridSize: 5,
+    start: {x: 0, y: 0, direction: 'EAST'},
+    target: {x: 4, y: 0},
+    optimalCommandCount: 8,
+    difficulty: 'INTERMEDIATE',
+    concepts: ['food-navigation', 'hazard-avoidance', 'nutrition'],
+    phase: 3,
+    worldMapId: 'campus_nutrition',
+    movementPolicy: 'ROAD_ONLY',
   },
 ];
 

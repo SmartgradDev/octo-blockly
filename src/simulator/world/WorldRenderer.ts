@@ -519,6 +519,76 @@ export class WorldRenderer {
       }
 
       const r = obj.interactionRadius ?? 16;
+      const isFood =
+        obj.type === 'FOOD' ||
+        (obj.metadata && obj.metadata.category === 'FOOD');
+      const foodClass =
+        obj.metadata && obj.metadata.foodClassification
+          ? (obj.metadata.foodClassification as 'HEALTHY' | 'UNHEALTHY')
+          : undefined;
+
+      // ── Specialized Food Rendering ──
+      if (isFood && foodClass) {
+        const isHealthy = foodClass === 'HEALTHY';
+        const isActivatedHazard = obj.state === 'ACTIVATED';
+
+        if (isHealthy) {
+          // Healthy Food: Emerald green/golden glow aura and pill background
+          const auraColor = obj.color ?? 0x10b981; // Emerald green
+          this.missionObjectsGraphics.fillStyle(auraColor, 0.25);
+          this.missionObjectsGraphics.fillCircle(obj.x, obj.y, r + 4);
+
+          // Green circular plate
+          this.missionObjectsGraphics.fillStyle(0xdcfce7, 0.95);
+          this.missionObjectsGraphics.fillCircle(obj.x, obj.y, r);
+          this.missionObjectsGraphics.lineStyle(2, 0x16a34a, 0.9);
+          this.missionObjectsGraphics.strokeCircle(obj.x, obj.y, r);
+
+          // Food icon symbol (e.g. 🍎, 🍌, 🥕)
+          if (obj.iconSymbol) {
+            this.createText(obj.x, obj.y, obj.iconSymbol, 15, '#ffffff', true, 59);
+          }
+
+          // Healthy badge label
+          const labelText = obj.label || 'Healthy';
+          this.createText(obj.x, obj.y + r + 8, labelText, 9, '#15803d', true, 59);
+        } else {
+          // Unhealthy Food: Amber/red hazard aura and circular hazard plate
+          const hazardColor = isActivatedHazard ? 0xef4444 : (obj.color ?? 0xf97316);
+          const plateBg = isActivatedHazard ? 0xfee2e2 : 0xffedd5;
+          const strokeColor = isActivatedHazard ? 0xdc2626 : 0xea580c;
+
+          this.missionObjectsGraphics.fillStyle(hazardColor, isActivatedHazard ? 0.4 : 0.22);
+          this.missionObjectsGraphics.fillCircle(obj.x, obj.y, r + 4);
+
+          // Circular hazard dish
+          this.missionObjectsGraphics.fillStyle(plateBg, 0.95);
+          this.missionObjectsGraphics.fillCircle(obj.x, obj.y, r);
+          this.missionObjectsGraphics.lineStyle(isActivatedHazard ? 2.5 : 2, strokeColor, 1);
+          this.missionObjectsGraphics.strokeCircle(obj.x, obj.y, r);
+
+          // If activated/encountered hazard, draw a warning indicator badge
+          if (isActivatedHazard) {
+            this.missionObjectsGraphics.fillStyle(0xef4444, 0.85);
+            this.missionObjectsGraphics.fillCircle(obj.x + r * 0.7, obj.y - r * 0.7, 5);
+            this.missionObjectsGraphics.lineStyle(1, 0xffffff, 1);
+            this.missionObjectsGraphics.strokeCircle(obj.x + r * 0.7, obj.y - r * 0.7, 5);
+          }
+
+          // Food icon symbol (e.g. 🍔, 🥤, 🍬)
+          if (obj.iconSymbol) {
+            this.createText(obj.x, obj.y, obj.iconSymbol, 15, '#ffffff', true, 59);
+          }
+
+          // Unhealthy badge label
+          const labelText = obj.label || (isActivatedHazard ? 'Hit!' : 'Junk');
+          const labelColor = isActivatedHazard ? '#dc2626' : '#c2410c';
+          this.createText(obj.x, obj.y + r + 8, labelText, 9, labelColor, true, 59);
+        }
+        continue;
+      }
+
+      // ── Generic Collectibles (e.g. Gems) ──
       const color = obj.color ?? 0x38bdf8; // Gem cyan/sky blue by default
 
       // 1. Soft pulsing glow aura underneath
