@@ -86,7 +86,7 @@ const worldRobot: WorldRobotState = createWorldRobotState(
   50,
   currentMission.initialBattery,
 );
-const worldCommandExecutor = new WorldCommandExecutor(activeWorldMap.bounds);
+const worldCommandExecutor = new WorldCommandExecutor(activeWorldMap);
 
 const phaserContainer = document.getElementById('phaserSimulatorContainer');
 const telemetryHud = document.getElementById('telemetryHud');
@@ -611,6 +611,35 @@ const runProgram = async () => {
 
     if (!result.ok) {
       hadError = true;
+      // If there was partial collision travel, smoothly animate to the safe target pose before halting
+      if (
+        result.reason === 'WORLD_COLLISION' &&
+        result.partialTravelRatio !== undefined &&
+        result.partialTravelRatio > 0.001 &&
+        simulationBridge
+      ) {
+        const isTurn = cmd === 'TURN_LEFT' || cmd === 'TURN_RIGHT';
+        const baseDurationMs = calculateStepDurationMs(
+          worldRobot.motorSpeedSetting,
+          isTurn,
+          worldCommandExecutor.getMovementConfig(),
+        );
+        const partialDurationMs = Math.max(
+          60,
+          Math.round(baseDurationMs * result.partialTravelRatio),
+        );
+        await simulationBridge.onStateChange({
+          grid,
+          robot,
+          worldRobot,
+          mission: currentMission,
+          progressText: currentEval.progressText,
+          durationMs: partialDurationMs,
+          onProgress: (interPose) => {
+            updateTelemetryDisplay(interPose, currentEval.progressText);
+          },
+        });
+      }
       setStatus(
         `Step ${executedCount} (${cmd}): ${result.message}`,
         'error',
@@ -887,5 +916,12 @@ if (typeof window !== 'undefined') {
   (window as any).__step2SetRoadDebug = (enabled: boolean) => {
     phaserSimulator?.setDebugRoadOverlay(enabled);
     return enabled;
+  };
+  (window as any).__step2SetCollisionDebug = (enabled: boolean) => {
+    phaserSimulator?.setDebugCollisionOverlay(enabled);
+    return enabled;
+  };
+  (window as any).__step2GetColliders = () => {
+    return worldCommandExecutor.getCollisionSystem()?.getColliders() || [];
   };
 }

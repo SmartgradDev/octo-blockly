@@ -101,6 +101,14 @@ export class PhaserSimulator {
     return this.scene ? this.scene.isDebugRoadOverlayEnabled() : false;
   }
 
+  public setDebugCollisionOverlay(enabled: boolean): void {
+    this.scene?.setDebugCollisionOverlay(enabled);
+  }
+
+  public isDebugCollisionOverlayEnabled(): boolean {
+    return this.scene ? this.scene.isDebugCollisionOverlayEnabled() : false;
+  }
+
   public getGame(): Phaser.Game | null {
     return this.game;
   }

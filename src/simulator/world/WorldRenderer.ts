@@ -38,8 +38,11 @@ export class WorldRenderer {
   private sceneryGraphics: Phaser.GameObjects.Graphics;
   private objectiveGraphics: Phaser.GameObjects.Graphics;
   private debugRoadGraphics: Phaser.GameObjects.Graphics;
+  private debugCollisionGraphics: Phaser.GameObjects.Graphics;
   private labelGroup: Phaser.GameObjects.Group;
   private debugRoadOverlay: boolean = false;
+  private debugCollisionOverlay: boolean = false;
+  private lastMap: WorldMapData | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -51,6 +54,7 @@ export class WorldRenderer {
     this.sceneryGraphics = scene.add.graphics().setDepth(50);
     this.objectiveGraphics = scene.add.graphics().setDepth(60);
     this.debugRoadGraphics = scene.add.graphics().setDepth(70);
+    this.debugCollisionGraphics = scene.add.graphics().setDepth(72);
     this.labelGroup = scene.add.group();
   }
 
@@ -62,10 +66,23 @@ export class WorldRenderer {
     return this.debugRoadOverlay;
   }
 
-  /**
-   * Main render method: takes any continuous WorldMapData and draws procedural vector elements.
-   */
+  public setDebugCollisionOverlay(enabled: boolean): void {
+    this.debugCollisionOverlay = enabled;
+    if (this.lastMap) {
+      if (enabled) {
+        this.renderCollisionDebugOverlay(this.lastMap);
+      } else {
+        this.debugCollisionGraphics.clear();
+      }
+    }
+  }
+
+  public isDebugCollisionOverlayEnabled(): boolean {
+    return this.debugCollisionOverlay;
+  }
+
   public render(map: WorldMapData): void {
+    this.lastMap = map;
     this.clear();
 
     // 1. Base terrain ground
@@ -87,6 +104,11 @@ export class WorldRenderer {
 
     // 6. Mission objectives & goal markers
     this.renderObjectives(map.objectives);
+
+    // 7. Collision debug overlay (if enabled)
+    if (this.debugCollisionOverlay) {
+      this.renderCollisionDebugOverlay(map);
+    }
   }
 
   private renderGround(map: WorldMapData): void {
@@ -427,6 +449,30 @@ export class WorldRenderer {
     return txt;
   }
 
+  private renderCollisionDebugOverlay(map: WorldMapData): void {
+    this.debugCollisionGraphics.clear();
+
+    // 1. Solid buildings (red boxes with red semi-transparent fill)
+    for (const b of map.buildings) {
+      if (b.solid !== false) {
+        this.debugCollisionGraphics.fillStyle(0xef4444, 0.22);
+        this.debugCollisionGraphics.fillRect(b.x, b.y, b.width, b.height);
+        this.debugCollisionGraphics.lineStyle(2, 0xdc2626, 0.9);
+        this.debugCollisionGraphics.strokeRect(b.x, b.y, b.width, b.height);
+      }
+    }
+
+    // 2. Solid trees (red circles with red semi-transparent fill)
+    for (const t of map.trees) {
+      if (t.solid !== false) {
+        this.debugCollisionGraphics.fillStyle(0xef4444, 0.22);
+        this.debugCollisionGraphics.fillCircle(t.x, t.y, t.canopyRadius);
+        this.debugCollisionGraphics.lineStyle(2, 0xdc2626, 0.9);
+        this.debugCollisionGraphics.strokeCircle(t.x, t.y, t.canopyRadius);
+      }
+    }
+  }
+
   public clear(): void {
     this.groundGraphics.clear();
     this.roadGraphics.clear();
@@ -434,6 +480,7 @@ export class WorldRenderer {
     this.sceneryGraphics.clear();
     this.objectiveGraphics.clear();
     this.debugRoadGraphics.clear();
+    this.debugCollisionGraphics.clear();
     this.labelGroup.clear(true, true);
   }
 
@@ -444,6 +491,7 @@ export class WorldRenderer {
     this.sceneryGraphics.destroy();
     this.objectiveGraphics.destroy();
     this.debugRoadGraphics.destroy();
+    this.debugCollisionGraphics.destroy();
     this.labelGroup.destroy(true);
   }
 }

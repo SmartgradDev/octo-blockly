@@ -10,9 +10,14 @@
  */
 
 import {RobotCommand} from '../../robot/RobotState';
-import {Size2D} from './WorldData';
+import {Size2D, Point2D, WorldMapData} from './WorldData';
 import {WorldRobotState, RobotPose2D, radiansToDegrees} from './WorldRobotState';
 import {WorldRobotAdapter} from './WorldRobotAdapter';
+import {
+  WorldCollisionSystem,
+  WorldCollider,
+  PathCollisionResult,
+} from './WorldCollisionSystem';
 
 export interface WorldMovementConfig {
   /**
@@ -65,6 +70,7 @@ export function calculateStepDurationMs(
 export type WorldExecutionFailureReason =
   | 'OK'
   | 'WORLD_BOUNDARY'
+  | 'WORLD_COLLISION'
   | 'BATTERY_DEPLETED'
   | 'UNKNOWN_COMMAND';
 
@@ -75,19 +81,34 @@ export interface WorldCommandResult {
   reason: WorldExecutionFailureReason;
   previousPose: RobotPose2D;
   currentPose: RobotPose2D;
+  colliderId?: string;
+  colliderType?: string;
+  collisionPoint?: Point2D;
+  /** Ratio of path actually traveled (0..1) for scaling partial animation duration */
+  partialTravelRatio?: number;
 }
 
 export class WorldCommandExecutor {
   private worldBounds: Size2D;
   private config: WorldMovementConfig;
   private adapter: WorldRobotAdapter;
+  private collisionSystem: WorldCollisionSystem;
 
   constructor(
-    worldBounds: Size2D,
+    worldBoundsOrMap: Size2D | WorldMapData,
     config: Partial<WorldMovementConfig> = {},
     adapter?: WorldRobotAdapter,
+    collisionSystem?: WorldCollisionSystem,
   ) {
-    this.worldBounds = worldBounds;
+    if ('bounds' in worldBoundsOrMap) {
+      this.worldBounds = worldBoundsOrMap.bounds;
+      this.collisionSystem =
+        collisionSystem || new WorldCollisionSystem(worldBoundsOrMap);
+    } else {
+      this.worldBounds = worldBoundsOrMap;
+      this.collisionSystem = collisionSystem || new WorldCollisionSystem();
+    }
+
     this.config = {...DEFAULT_WORLD_MOVEMENT_CONFIG, ...config};
     this.adapter =
       adapter ||
@@ -105,9 +126,18 @@ export class WorldCommandExecutor {
     return this.adapter;
   }
 
+  public getCollisionSystem(): WorldCollisionSystem {
+    return this.collisionSystem;
+  }
+
+  public setWorldMap(map: WorldMapData): void {
+    this.worldBounds = map.bounds;
+    this.collisionSystem.loadFromWorldMap(map);
+  }
+
   /**
    * Executes a single command on the continuous WorldRobotState.
-   * Validates against continuous world boundaries with ZERO grid-cell logic.
+   * Validates continuous world boundaries and solid object collisions with zero grid-cell logic.
    */
   public execute(
     worldRobot: WorldRobotState,
@@ -147,13 +177,79 @@ export class WorldCommandExecutor {
         const targetX = worldRobot.x + Math.cos(worldRobot.rotation) * dist;
         const targetY = worldRobot.y + Math.sin(worldRobot.rotation) * dist;
 
-        // Continuous World Boundary check (no rows, columns, or cell conversions)
+        const startPt: Point2D = {x: worldRobot.x, y: worldRobot.y};
+        const targetPt: Point2D = {x: targetX, y: targetY};
+        const dx = targetX - startPt.x;
+        const dy = targetY - startPt.y;
+
+        // 1. Continuous World Boundary exit check
         const minX = this.config.boundaryMargin;
         const maxX = this.worldBounds.width - this.config.boundaryMargin;
         const minY = this.config.boundaryMargin;
         const maxY = this.worldBounds.height - this.config.boundaryMargin;
 
-        if (targetX < minX || targetX > maxX || targetY < minY || targetY > maxY) {
+        let tBoundary = Infinity;
+        if (dx > 0 && targetX > maxX) {
+          tBoundary = Math.min(tBoundary, (maxX - startPt.x) / dx);
+        } else if (dx < 0 && targetX < minX) {
+          tBoundary = Math.min(tBoundary, (minX - startPt.x) / dx);
+        }
+        if (dy > 0 && targetY > maxY) {
+          tBoundary = Math.min(tBoundary, (maxY - startPt.y) / dy);
+        } else if (dy < 0 && targetY < minY) {
+          tBoundary = Math.min(tBoundary, (minY - startPt.y) / dy);
+        }
+        if (tBoundary < Infinity) {
+          tBoundary = Math.max(0, tBoundary);
+        }
+
+        // 2. Swept continuous collision check against solid world objects (buildings, trees)
+        const colResult = this.collisionSystem.checkSweptPath(startPt, targetPt);
+        let tCollision = Infinity;
+        if (colResult.collided && colResult.totalDistance > 0) {
+          tCollision = colResult.collisionDistance / colResult.totalDistance;
+        }
+
+        // 3. Earliest blocking condition priority resolution
+        // Case A: Solid obstacle collision occurs earliest along movement path
+        if (tCollision < tBoundary && colResult.collided && colResult.collider) {
+          const safeTarget = colResult.safeTarget || startPt;
+          const partialRatio =
+            colResult.totalDistance > 0
+              ? colResult.safeDistance / colResult.totalDistance
+              : 0;
+
+          // Commit robot pose to closest safe point immediately before obstacle
+          this.adapter.setPose(
+            worldRobot,
+            safeTarget.x,
+            safeTarget.y,
+            worldRobot.rotation,
+          );
+          worldRobot.state = 'stopped';
+
+          const currentPose: RobotPose2D = {
+            x: worldRobot.x,
+            y: worldRobot.y,
+            rotation: worldRobot.rotation,
+          };
+
+          return {
+            ok: false,
+            command,
+            reason: 'WORLD_COLLISION',
+            message: `Cannot move — blocked by ${colResult.collider.name}.`,
+            previousPose,
+            currentPose,
+            colliderId: colResult.collider.id,
+            colliderType: colResult.collider.type.toUpperCase() as 'BUILDING' | 'TREE' | 'OBSTACLE',
+            collisionPoint: colResult.collisionPoint,
+            partialTravelRatio: partialRatio,
+          };
+        }
+
+        // Case B: World boundary reached earliest
+        if (tBoundary <= tCollision && tBoundary < Infinity) {
           worldRobot.state = 'stopped';
           return {
             ok: false,
@@ -165,7 +261,7 @@ export class WorldCommandExecutor {
           };
         }
 
-        // Apply movement update via adapter
+        // Case C: Clear traversable path (open ground / grass / road)
         this.adapter.setPose(worldRobot, targetX, targetY, worldRobot.rotation);
         worldRobot.state = 'moving';
 
@@ -182,6 +278,7 @@ export class WorldCommandExecutor {
           message: `Moved to (X:${targetX.toFixed(1)}, Y:${targetY.toFixed(1)})`,
           previousPose,
           currentPose,
+          partialTravelRatio: 1,
         };
       }
 

@@ -55,6 +55,7 @@ export interface WorldBuilding extends BoundingBox2D {
   windowCols?: number;
   windowRows?: number;
   doorPosition?: Point2D;
+  solid?: boolean;
 }
 
 export interface WorldTree extends Point2D {
@@ -62,6 +63,7 @@ export interface WorldTree extends Point2D {
   canopyRadius: number;
   canopyColor?: number;
   trunkRadius?: number;
+  solid?: boolean;
 }
 
 export interface ParkZone extends BoundingBox2D {

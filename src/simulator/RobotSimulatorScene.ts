@@ -105,6 +105,16 @@ export class RobotSimulatorScene extends Phaser.Scene {
     return this.worldRenderer ? this.worldRenderer.isDebugRoadOverlayEnabled() : false;
   }
 
+  public setDebugCollisionOverlay(enabled: boolean): void {
+    if (this.worldRenderer) {
+      this.worldRenderer.setDebugCollisionOverlay(enabled);
+    }
+  }
+
+  public isDebugCollisionOverlayEnabled(): boolean {
+    return this.worldRenderer ? this.worldRenderer.isDebugCollisionOverlayEnabled() : false;
+  }
+
   private updateCameraViewport(viewportWidth: number, viewportHeight: number): void {
     const {width: worldW, height: worldH} = this.currentWorldMap.bounds;
     
