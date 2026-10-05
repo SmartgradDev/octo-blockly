@@ -13,9 +13,12 @@ import {GridConfig, RobotState} from '../robot/RobotState';
 import {Position, TargetPosition, ColoredCell} from '../robot/Mission';
 import {RobotRenderer, GridCoordinateConverter} from './RobotRenderer';
 
+import {WorldRobotState} from './world';
+
 export interface GridRenderData {
   grid: GridConfig;
   robot: RobotState;
+  worldRobot?: WorldRobotState;
   target?: TargetPosition;
   obstacles?: Position[];
   cellColors?: ColoredCell[];
@@ -199,8 +202,12 @@ export class PhaserGridRenderer implements GridCoordinateConverter {
     }
 
     // 5. Delegate robot rendering to the dedicated RobotRenderer
-    this.robotRenderer.setCoordinateConverter(this);
-    this.robotRenderer.render(robot, data.immediate || false);
+    if (data.worldRobot) {
+      this.robotRenderer.renderWorld(data.worldRobot, data.immediate || false);
+    } else {
+      this.robotRenderer.setCoordinateConverter(this);
+      this.robotRenderer.render(robot, data.immediate || false);
+    }
   }
 
   private createText(

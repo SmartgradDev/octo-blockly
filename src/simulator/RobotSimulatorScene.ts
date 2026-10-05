@@ -48,9 +48,15 @@ export class RobotSimulatorScene extends Phaser.Scene {
     // 4. Initialize Robot/GridRenderer for robot presentation on top of world
     this.gridRenderer = new PhaserGridRenderer(this);
 
-    // If data was set prior to create() completion, render robot
+    // If data was set prior to create() completion, render robot; otherwise render at world spawn point
     if (this.currentRenderData) {
       this.gridRenderer.render(this.currentRenderData);
+    } else {
+      const spawn = this.currentWorldMap.spawnPoint;
+      this.gridRenderer.getRobotRenderer().renderWorld(
+        {x: spawn.position.x, y: spawn.position.y, rotation: spawn.rotation},
+        true,
+      );
     }
 
     // Responsive canvas resize handling

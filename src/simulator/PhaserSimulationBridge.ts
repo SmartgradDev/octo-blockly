@@ -25,10 +25,12 @@ import {GridConfig, RobotState} from '../robot/RobotState';
 import {Mission, Position} from '../robot/Mission';
 import {PhaserSimulator} from './PhaserSimulator';
 import {GridRenderData} from './PhaserGridRenderer';
+import {WorldRobotState} from './world';
 
 export interface BridgeStatePayload {
   grid: GridConfig;
   robot: RobotState;
+  worldRobot?: WorldRobotState;
   mission: Mission;
   collectedItems?: Position[];
   progressText?: string;
@@ -47,11 +49,12 @@ export class PhaserSimulationBridge {
    * Maps authoritative Robot Engine state directly to Phaser visual state.
    */
   public onStateChange(payload: BridgeStatePayload): void {
-    const {grid, robot, mission, collectedItems, immediate} = payload;
+    const {grid, robot, worldRobot, mission, collectedItems, immediate} = payload;
 
     const renderData: GridRenderData = {
       grid,
       robot,
+      worldRobot,
       target: mission.target,
       obstacles: mission.obstacles,
       cellColors: mission.cellColors,

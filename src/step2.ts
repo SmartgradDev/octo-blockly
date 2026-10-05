@@ -19,6 +19,13 @@ import {getMissionsByPhase, Mission, Position} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
 import {evaluateMission, MissionRuntimeState} from './robot/MissionEvaluator';
 import {PhaserSimulator, PhaserSimulationBridge} from './simulator';
+import {
+  CAMPUS_TOWN_MAP,
+  WorldRobotState,
+  createWorldRobotState,
+  WorldRobotAdapter,
+  radiansToDegrees,
+} from './simulator/world';
 import octopusIcon from './assets/octopus-icon.png';
 import './index.css';
 
@@ -67,6 +74,17 @@ const robot = createRobotState(
   currentMission.start.y,
   currentMission.start.direction,
 );
+
+// ── Step 2 Continuous World Robot State & Command Adapter ───────────
+const activeWorldMap = CAMPUS_TOWN_MAP;
+const worldRobot: WorldRobotState = createWorldRobotState(
+  activeWorldMap.spawnPoint.position.x,
+  activeWorldMap.spawnPoint.position.y,
+  activeWorldMap.spawnPoint.rotation,
+  50,
+  currentMission.initialBattery,
+);
+const worldRobotAdapter = new WorldRobotAdapter();
 
 const phaserContainer = document.getElementById('phaserSimulatorContainer');
 const telemetryHud = document.getElementById('telemetryHud');
@@ -139,11 +157,12 @@ function updateStep2View(
   progressText?: string,
   immediate: boolean = false,
 ): void {
-  // 1. Phaser Simulation Bridge (Robot Engine -> Bridge -> Phaser Visual State)
+  // 1. Phaser Simulation Bridge (World Robot State -> Bridge -> Phaser Visual State)
   if (simulationBridge) {
     simulationBridge.onStateChange({
       grid,
       robot,
+      worldRobot,
       mission: currentMission,
       collectedItems: currentCollectedItems,
       progressText,
@@ -153,8 +172,9 @@ function updateStep2View(
 
   // 2. DOM Telemetry HUD (outside Phaser canvas)
   if (telemetryHud) {
-    const posChip = `<div class="hud-chip hud-chip-pos"><span class="hud-icon">📍</span><span class="hud-label">(${robot.x}, ${robot.y})</span></div>`;
-    const dirChip = `<div class="hud-chip hud-chip-dir"><span class="hud-icon">${directionArrow(robot.direction)}</span><span class="hud-label">${robot.direction}</span></div>`;
+    const headingDeg = Math.round(radiansToDegrees(worldRobot.rotation));
+    const posChip = `<div class="hud-chip hud-chip-pos"><span class="hud-icon">📍</span><span class="hud-label">X:${worldRobot.x.toFixed(1)}, Y:${worldRobot.y.toFixed(1)}</span></div>`;
+    const dirChip = `<div class="hud-chip hud-chip-dir"><span class="hud-icon">🧭</span><span class="hud-label">${headingDeg}° (${worldRobot.rotation.toFixed(2)} rad)</span></div>`;
     const speedChip = `<div class="hud-chip hud-chip-speed"><span class="hud-icon">⚡</span><span class="hud-label">${robot.motorSpeed}%</span></div>`;
 
     let batChip = '';
@@ -321,6 +341,8 @@ const loadMission = (mission: Mission) => {
     mission.initialBattery !== undefined
       ? Math.max(0, mission.initialBattery)
       : undefined;
+
+  worldRobotAdapter.resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
 
   if (missionTitleEl) missionTitleEl.textContent = mission.title;
   if (missionDescEl) missionDescEl.textContent = mission.description;
@@ -506,6 +528,8 @@ const runProgram = async () => {
       ? Math.max(0, currentMission.initialBattery)
       : undefined;
 
+  worldRobotAdapter.resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
+
   activeRuntimeState = {
     collectedItems: [],
     visitedColors: new Set(),
@@ -595,6 +619,10 @@ const runProgram = async () => {
     const cmd = stepResult.command;
     const executedCount = activeInterpreter.getExecutedCommandCount();
 
+    // 1. Update continuous WorldRobotState
+    worldRobotAdapter.executeCommand(worldRobot, cmd);
+
+    // 2. Execute command on discrete robot state for mission goals
     const result = executeCommand(
       robot,
       grid,
@@ -724,6 +752,8 @@ const resetRobot = () => {
     currentMission.initialBattery !== undefined
       ? Math.max(0, currentMission.initialBattery)
       : undefined;
+
+  worldRobotAdapter.resetToSpawn(worldRobot, activeWorldMap.spawnPoint);
 
   const resetRuntimeState: MissionRuntimeState = {
     collectedItems: [],
@@ -867,4 +897,14 @@ if (ws) {
     }
     updateCodePreview();
   });
+}
+
+// ── Development & Validation Testing Hooks ──────────────────────────
+if (typeof window !== 'undefined') {
+  (window as any).__step2TestPose = (x: number, y: number, rotation: number) => {
+    worldRobotAdapter.setPose(worldRobot, x, y, rotation);
+    updateStep2View([], 'Manual pose test', false);
+    return {x: worldRobot.x, y: worldRobot.y, rotation: worldRobot.rotation};
+  };
+  (window as any).__step2GetWorldRobot = () => ({...worldRobot});
 }

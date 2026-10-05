@@ -1,19 +1,33 @@
 /**
- * RobotRenderer — dedicated Phaser 4 robot presentation renderer.
+ * RobotRenderer — dedicated Phaser 4 robot presentation renderer for Step 2.
  *
  * Architecture Rules:
- * 1. Single source of truth: RobotState (x, y, direction, motorSpeed, battery)
- *    is owned and updated strictly by the shared Robot Engine.
+ * 1. Single source of truth: WorldRobotState (x, y, rotation, speed, state)
+ *    is owned and updated strictly by the continuous simulation engine.
  * 2. RobotRenderer never alters or duplicates state.
- * 3. It converts logical grid coordinates (col, row) into Phaser world coordinates (px, py).
- * 4. It animates visual position transitions using Phaser 4 tweens.
- * 5. It animates visual turning rotations smoothly using Phaser 4 rotation tweens,
+ * 3. Consumes continuous world coordinates (x, y, rotation) directly.
+ * 4. Coordinate convention:
+ *    - 0 rad (0°)          -> Facing East (+X axis)
+ *    - PI/2 rad (+90°)     -> Facing South (+Y axis)
+ *    - PI rad (180°)       -> Facing West (-X axis)
+ *    - -PI/2 rad (-90°)    -> Facing North (-Y axis)
+ * 5. Animates visual position transitions using Phaser 4 tweens.
+ * 6. Animates visual turning rotations smoothly using Phaser 4 rotation tweens,
  *    choosing the shortest/expected angular path.
- * 6. Visual tweens never block or dictate logical simulation correctness.
+ * 7. Visual tweens never block or dictate logical simulation correctness.
  */
 
 import * as Phaser from 'phaser';
 import {Direction, RobotState} from '../robot/RobotState';
+
+export interface WorldRobotPose {
+  /** Continuous world X coordinate (pixels/world units) */
+  x: number;
+  /** Continuous world Y coordinate (pixels/world units) */
+  y: number;
+  /** Continuous heading in radians (0 = East, PI/2 = South, etc.) */
+  rotation: number;
+}
 
 export interface GridCoordinateConverter {
   toWorldPosition(col: number, row: number): {x: number; y: number};
@@ -25,11 +39,14 @@ export interface RobotRendererConfig {
   moveDurationMs: number;
   /** Configurable rotation animation duration in milliseconds (default: 200ms) */
   turnDurationMs: number;
+  /** Base visual radius of the robot chassis (default: 16px) */
+  robotRadius: number;
 }
 
 export const DEFAULT_ROBOT_RENDERER_CONFIG: RobotRendererConfig = {
   moveDurationMs: 250,
   turnDurationMs: 200,
+  robotRadius: 16,
 };
 
 export class RobotRenderer {
@@ -38,19 +55,19 @@ export class RobotRenderer {
   private bodyGraphics: Phaser.GameObjects.Graphics;
   private pointerGraphics: Phaser.GameObjects.Graphics;
   private directionBadge: Phaser.GameObjects.Text;
-  private coordinateConverter: GridCoordinateConverter;
+  private coordinateConverter?: GridCoordinateConverter;
   private config: RobotRendererConfig;
 
   // Visual tween tracking
   private activeMoveTween: Phaser.Tweens.Tween | null = null;
   private activeTurnTween: Phaser.Tweens.Tween | null = null;
-  private lastRenderedDirection: Direction | null = null;
+  private lastTargetAngle: number | null = null;
   private isInitialized: boolean = false;
-  private lastDrawnCellSize: number = 0;
+  private currentRadius: number = 0;
 
   constructor(
     scene: Phaser.Scene,
-    coordinateConverter: GridCoordinateConverter,
+    coordinateConverter?: GridCoordinateConverter,
     config: Partial<RobotRendererConfig> = {},
   ) {
     this.scene = scene;
@@ -64,12 +81,12 @@ export class RobotRenderer {
     this.bodyGraphics = this.scene.add.graphics();
     this.container.add(this.bodyGraphics);
 
-    // Pointer graphics (directional front arrow pointing along local NORTH = -Y)
+    // Pointer graphics (directional front arrow pointing along local +X)
     this.pointerGraphics = this.scene.add.graphics();
     this.container.add(this.pointerGraphics);
 
     // Direction symbol badge
-    this.directionBadge = this.scene.add.text(0, 0, '▲', {
+    this.directionBadge = this.scene.add.text(0, 0, '▶', {
       fontFamily: 'system-ui, -apple-system, sans-serif',
       fontSize: '11px',
       color: '#ffffff',
@@ -183,18 +200,18 @@ export class RobotRenderer {
   }
 
   /**
-   * Maps cardinal direction to continuous angle in radians (local NORTH is 0 radians).
+   * Maps cardinal direction to continuous angle in radians (East is 0 radians).
    */
-  private directionToAngle(dir: Direction): number {
+  public directionToAngle(dir: Direction): number {
     switch (dir) {
-      case 'NORTH':
-        return 0;
       case 'EAST':
-        return Math.PI / 2; // +90 deg
+        return 0;
       case 'SOUTH':
-        return Math.PI; // +180 deg
+        return Math.PI / 2; // +90 deg
       case 'WEST':
-        return (3 * Math.PI) / 2; // +270 deg (or -90 deg)
+        return Math.PI; // +180 deg
+      case 'NORTH':
+        return -Math.PI / 2; // -90 deg
     }
   }
 
@@ -214,31 +231,32 @@ export class RobotRenderer {
   }
 
   /**
-   * Main render method: takes authoritative RobotState and positions/orients Phaser GameObjects.
+   * Primary Step 2 render method: takes continuous WorldRobotPose (x, y, rotation)
+   * and renders directly to Phaser without grid conversion.
    *
-   * @param robot Authoritative RobotState from Robot Engine
-   * @param immediate If true (e.g. on reset or initial load), snaps position & rotation immediately
+   * @param pose Continuous world coordinates and heading in radians
+   * @param immediate If true, snaps immediately without tweens
    */
-  public render(robot: RobotState, immediate: boolean = false): void {
-    const targetWorldPos = this.coordinateConverter.toWorldPosition(robot.x, robot.y);
-    const cellSize = this.coordinateConverter.getCellSize();
-    const radius = Math.floor((cellSize - 12) / 2);
+  public renderWorld(pose: WorldRobotPose, immediate: boolean = false): void {
+    const radius = this.config.robotRadius;
 
-    // Redraw chassis graphics if cell size changed or not initialized
-    if (!this.isInitialized || this.lastDrawnCellSize !== cellSize) {
+    // Draw robot graphics if not initialized or radius changed
+    if (!this.isInitialized || this.currentRadius !== radius) {
       this.drawRobotGraphics(radius);
-      this.lastDrawnCellSize = cellSize;
+      this.currentRadius = radius;
     }
 
-    const targetAngle = this.directionToAngle(robot.direction);
+    const targetX = pose.x;
+    const targetY = pose.y;
+    const targetAngle = pose.rotation;
 
     // Initial placement or explicit reset/snap
     if (!this.isInitialized || immediate) {
       this.stopMovementTween(false);
       this.stopTurnTween(false);
-      this.container.setPosition(targetWorldPos.x, targetWorldPos.y);
+      this.container.setPosition(targetX, targetY);
       this.container.setRotation(targetAngle);
-      this.lastRenderedDirection = robot.direction;
+      this.lastTargetAngle = targetAngle;
       this.isInitialized = true;
       return;
     }
@@ -246,16 +264,16 @@ export class RobotRenderer {
     // ── Position Handling ──────────────────────────────────────────────
     const currentX = this.container.x;
     const currentY = this.container.y;
-    const dx = Math.abs(currentX - targetWorldPos.x);
-    const dy = Math.abs(currentY - targetWorldPos.y);
+    const dx = Math.abs(currentX - targetX);
+    const dy = Math.abs(currentY - targetY);
     const hasMoved = dx > 0.5 || dy > 0.5;
 
     if (hasMoved) {
       this.stopMovementTween(false);
       this.activeMoveTween = this.scene.tweens.add({
         targets: this.container,
-        x: targetWorldPos.x,
-        y: targetWorldPos.y,
+        x: targetX,
+        y: targetY,
         duration: this.config.moveDurationMs,
         ease: 'Cubic.easeOut',
         onComplete: () => {
@@ -265,9 +283,12 @@ export class RobotRenderer {
     }
 
     // ── Rotation Handling ──────────────────────────────────────────────
-    const hasTurned = this.lastRenderedDirection !== robot.direction;
+    const hasTurned =
+      this.lastTargetAngle === null ||
+      Math.abs(this.getShortestAngleDelta(this.lastTargetAngle, targetAngle)) > 0.001;
+
     if (hasTurned) {
-      this.lastRenderedDirection = robot.direction;
+      this.lastTargetAngle = targetAngle;
       this.stopTurnTween(false);
 
       const currentRotation = this.container.rotation;
@@ -281,25 +302,50 @@ export class RobotRenderer {
         ease: 'Cubic.easeOut',
         onComplete: () => {
           this.activeTurnTween = null;
-          // Keep rotation normalized within [0, 2*PI)
-          this.container.setRotation(((destinationAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2));
+          // Normalize rotation within (-PI, +PI]
+          const twoPi = Math.PI * 2;
+          let norm = destinationAngle % twoPi;
+          if (norm > Math.PI) norm -= twoPi;
+          else if (norm <= -Math.PI) norm += twoPi;
+          this.container.setRotation(norm);
         },
       });
     }
   }
 
   /**
-   * Resets the robot visually to logical grid position & direction immediately (no animation).
+   * Backward-compatible render method for discrete grid RobotState.
+   * Converts grid (col, row, direction) to world pose and delegates to renderWorld.
    */
-  public reset(robot: RobotState): void {
-    this.stopMovementTween(false);
-    this.stopTurnTween(false);
-    this.render(robot, true);
+  public render(robot: RobotState, immediate: boolean = false): void {
+    if (this.coordinateConverter) {
+      const targetPos = this.coordinateConverter.toWorldPosition(robot.x, robot.y);
+      const targetAngle = this.directionToAngle(robot.direction);
+      const cellSize = this.coordinateConverter.getCellSize();
+      this.config.robotRadius = Math.max(12, Math.floor((cellSize - 12) / 2));
+      this.renderWorld({x: targetPos.x, y: targetPos.y, rotation: targetAngle}, immediate);
+    } else {
+      const targetAngle = this.directionToAngle(robot.direction);
+      this.renderWorld({x: robot.x, y: robot.y, rotation: targetAngle}, immediate);
+    }
   }
 
   /**
-   * Draws robot visual shape once in local container space facing forward (along -Y).
-   * Rotation of the container then orientates the robot seamlessly.
+   * Resets the robot visually immediately (no animation).
+   */
+  public reset(pose: WorldRobotPose | RobotState): void {
+    this.stopMovementTween(false);
+    this.stopTurnTween(false);
+    if ('rotation' in pose) {
+      this.renderWorld(pose, true);
+    } else {
+      this.render(pose, true);
+    }
+  }
+
+  /**
+   * Draws robot visual shape in local container space facing East (+X axis).
+   * Rotation of the container then orientates the robot seamlessly without angular offset.
    */
   private drawRobotGraphics(radius: number): void {
     this.bodyGraphics.clear();
@@ -317,41 +363,49 @@ export class RobotRenderer {
     this.bodyGraphics.lineStyle(2, 0x1d4ed8, 1);
     this.bodyGraphics.strokeCircle(0, 0, radius);
 
-    // 4. Robot visor / optical scanner (cyan) facing forward (-Y)
-    const visorWidth = radius * 1.1;
-    const visorHeight = radius * 0.65;
+    // 4. Robot visor / optical scanner (cyan) facing forward along +X
+    const visorSpanY = radius * 1.1;
+    const visorThicknessX = radius * 0.55;
     this.bodyGraphics.fillStyle(0x67e8f9, 1);
     this.bodyGraphics.fillRoundedRect(
-      -visorWidth / 2,
-      -radius * 0.65,
-      visorWidth,
-      visorHeight,
+      radius * 0.15,
+      -visorSpanY / 2,
+      visorThicknessX,
+      visorSpanY,
       3,
     );
 
     // 5. Visor inner border
     this.bodyGraphics.lineStyle(1, 0x06b6d4, 0.8);
     this.bodyGraphics.strokeRoundedRect(
-      -visorWidth / 2,
-      -radius * 0.65,
-      visorWidth,
-      visorHeight,
+      radius * 0.15,
+      -visorSpanY / 2,
+      visorThicknessX,
+      visorSpanY,
       3,
     );
 
-    // 6. Directional Front Pointer (amber/orange orientation triangle pointing along -Y)
+    // 6. Directional Front Pointer (amber orientation triangle pointing along +X)
     const tipDistance = radius + 6;
     const baseDistance = radius - 2;
     const halfWidth = 5;
 
     this.pointerGraphics.fillStyle(0xf59e0b, 1);
-    this.pointerGraphics.fillTriangle(0, -tipDistance, -halfWidth, -baseDistance, halfWidth, -baseDistance);
+    this.pointerGraphics.fillTriangle(
+      tipDistance, 0,
+      baseDistance, -halfWidth,
+      baseDistance, halfWidth,
+    );
     this.pointerGraphics.lineStyle(1.5, 0xd97706, 1);
-    this.pointerGraphics.strokeTriangle(0, -tipDistance, -halfWidth, -baseDistance, halfWidth, -baseDistance);
+    this.pointerGraphics.strokeTriangle(
+      tipDistance, 0,
+      baseDistance, -halfWidth,
+      baseDistance, halfWidth,
+    );
 
     // 7. Direction Symbol Badge
-    this.directionBadge.setText('▲');
-    this.directionBadge.setPosition(0, radius * 0.25);
+    this.directionBadge.setText('▶');
+    this.directionBadge.setPosition(-radius * 0.25, 0);
   }
 
   public setVisible(visible: boolean): void {
@@ -364,3 +418,4 @@ export class RobotRenderer {
     this.container.destroy(true);
   }
 }
+
