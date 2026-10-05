@@ -27,6 +27,8 @@ import {PhaserSimulator} from './PhaserSimulator';
 import {GridRenderData} from './PhaserGridRenderer';
 import {WorldRobotState} from './world';
 
+import {WorldRobotPose} from './RobotRenderer';
+
 export interface BridgeStatePayload {
   grid: GridConfig;
   robot: RobotState;
@@ -35,6 +37,8 @@ export interface BridgeStatePayload {
   collectedItems?: Position[];
   progressText?: string;
   immediate?: boolean;
+  durationMs?: number;
+  onProgress?: (pose: WorldRobotPose) => void;
 }
 
 export class PhaserSimulationBridge {
@@ -48,8 +52,17 @@ export class PhaserSimulationBridge {
    * Called on robot movement, turn, item collection, or reset.
    * Maps authoritative Robot Engine state directly to Phaser visual state.
    */
-  public onStateChange(payload: BridgeStatePayload): void {
-    const {grid, robot, worldRobot, mission, collectedItems, immediate} = payload;
+  public onStateChange(payload: BridgeStatePayload): Promise<void> {
+    const {
+      grid,
+      robot,
+      worldRobot,
+      mission,
+      collectedItems,
+      immediate,
+      durationMs,
+      onProgress,
+    } = payload;
 
     const renderData: GridRenderData = {
       grid,
@@ -62,18 +75,27 @@ export class PhaserSimulationBridge {
       items: mission.items,
       collectedItems: collectedItems || [],
       immediate: immediate || false,
+      durationMs,
+      onProgress,
     };
 
-    this.simulator.updateState(renderData);
+    return this.simulator.updateState(renderData);
+  }
+
+  /**
+   * Returns current continuous visual pose from Phaser simulator.
+   */
+  public getVisualPose(): WorldRobotPose | null {
+    return this.simulator.getVisualPose();
   }
 
   /**
    * Explicit bridge handler for simulation reset events.
    * Forces immediate snapping without tweening.
    */
-  public onReset(payload: BridgeStatePayload): void {
+  public onReset(payload: BridgeStatePayload): Promise<void> {
     this.simulator.stopVisuals(false);
-    this.onStateChange({...payload, immediate: true});
+    return this.onStateChange({...payload, immediate: true});
   }
 
   /**
@@ -100,7 +122,7 @@ export class PhaserSimulationBridge {
   /**
    * Explicit bridge handler for robot movement or turn step events.
    */
-  public onStep(payload: BridgeStatePayload): void {
-    this.onStateChange(payload);
+  public onStep(payload: BridgeStatePayload): Promise<void> {
+    return this.onStateChange(payload);
   }
 }

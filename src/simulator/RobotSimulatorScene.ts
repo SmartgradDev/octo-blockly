@@ -70,11 +70,16 @@ export class RobotSimulatorScene extends Phaser.Scene {
   /**
    * Called by PhaserSimulator when simulation state changes
    */
-  public updateSimulationState(data: GridRenderData): void {
+  public updateSimulationState(data: GridRenderData): Promise<void> {
     this.currentRenderData = data;
     if (this.gridRenderer) {
-      this.gridRenderer.render(data);
+      return this.gridRenderer.render(data);
     }
+    return Promise.resolve();
+  }
+
+  public getVisualPose(): import('./RobotRenderer').WorldRobotPose | null {
+    return this.gridRenderer ? this.gridRenderer.getVisualPose() : null;
   }
 
   public pauseVisuals(): void {

@@ -69,11 +69,16 @@ export class PhaserSimulator {
   /**
    * Synchronizes the visual Phaser grid with the authoritative simulation state.
    */
-  public updateState(data: GridRenderData): void {
+  public updateState(data: GridRenderData): Promise<void> {
     this.pendingRenderData = data;
     if (this.scene) {
-      this.scene.updateSimulationState(data);
+      return this.scene.updateSimulationState(data);
     }
+    return Promise.resolve();
+  }
+
+  public getVisualPose(): import('./RobotRenderer').WorldRobotPose | null {
+    return this.scene ? this.scene.getVisualPose() : null;
   }
 
   public pauseVisuals(): void {

@@ -31,13 +31,36 @@ export interface WorldMovementConfig {
   turnAngleRad: number;
   /** Margin from world canvas boundary to keep robot visually inside borders */
   boundaryMargin: number;
+  /** Base movement animation duration in ms at 50% motor speed */
+  baseMoveDurationMs: number;
+  /** Base turn animation duration in ms at 50% motor speed */
+  baseTurnDurationMs: number;
 }
 
 export const DEFAULT_WORLD_MOVEMENT_CONFIG: WorldMovementConfig = {
   moveDistance: 65,
   turnAngleRad: Math.PI / 2,
   boundaryMargin: 16,
+  baseMoveDurationMs: 280,
+  baseTurnDurationMs: 200,
 };
+
+/**
+ * Calculates deterministic animation duration in milliseconds based on motor speed (1-100%).
+ * 50% speed -> baseDuration (e.g. 280ms move, 200ms turn)
+ * 100% speed -> 0.5x duration (e.g. 140ms move, 100ms turn)
+ * 20% speed -> 2.5x duration (e.g. 700ms move, 500ms turn)
+ */
+export function calculateStepDurationMs(
+  motorSpeedSetting: number = 50,
+  isTurn: boolean = false,
+  config: WorldMovementConfig = DEFAULT_WORLD_MOVEMENT_CONFIG,
+): number {
+  const base = isTurn ? config.baseTurnDurationMs : config.baseMoveDurationMs;
+  const clampedSpeed = Math.max(10, Math.min(100, motorSpeedSetting));
+  const factor = 50 / clampedSpeed;
+  return Math.round(Math.max(100, Math.min(800, base * factor)));
+}
 
 export type WorldExecutionFailureReason =
   | 'OK'

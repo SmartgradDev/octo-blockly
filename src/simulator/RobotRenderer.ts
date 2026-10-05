@@ -64,6 +64,7 @@ export class RobotRenderer {
   private lastTargetAngle: number | null = null;
   private isInitialized: boolean = false;
   private currentRadius: number = 0;
+  private pendingResolvers: Set<() => void> = new Set();
 
   constructor(
     scene: Phaser.Scene,
@@ -97,6 +98,18 @@ export class RobotRenderer {
   }
 
   /**
+   * Resolves and unblocks all pending animation Promises cleanly.
+   */
+  private notifyPendingResolved(): void {
+    if (this.pendingResolvers.size > 0) {
+      for (const resolve of this.pendingResolvers) {
+        resolve();
+      }
+      this.pendingResolvers.clear();
+    }
+  }
+
+  /**
    * Updates the coordinate converter if grid bounds or canvas resize occurred.
    */
   public setCoordinateConverter(converter: GridCoordinateConverter): void {
@@ -115,6 +128,27 @@ export class RobotRenderer {
    */
   public setTurnDuration(durationMs: number): void {
     this.config.turnDurationMs = Math.max(0, durationMs);
+  }
+
+  /**
+   * Returns current continuous visual pose from Phaser Container.
+   */
+  public getCurrentVisualPose(): WorldRobotPose {
+    return {
+      x: this.container ? this.container.x : 0,
+      y: this.container ? this.container.y : 0,
+      rotation: this.container ? this.container.rotation : 0,
+    };
+  }
+
+  /**
+   * Returns true if visual movement or rotation tween is currently in progress.
+   */
+  public isAnimating(): boolean {
+    return (
+      (this.activeMoveTween !== null && this.activeMoveTween.isPlaying()) ||
+      (this.activeTurnTween !== null && this.activeTurnTween.isPlaying())
+    );
   }
 
   /**
@@ -140,6 +174,7 @@ export class RobotRenderer {
       this.activeMoveTween.remove();
       this.activeMoveTween = null;
     }
+    this.notifyPendingResolved();
   }
 
   /**
@@ -165,6 +200,7 @@ export class RobotRenderer {
       this.activeTurnTween.remove();
       this.activeTurnTween = null;
     }
+    this.notifyPendingResolved();
   }
 
   /**
@@ -197,6 +233,7 @@ export class RobotRenderer {
   public stopVisuals(snapToTarget: boolean = true): void {
     this.stopMovementTween(snapToTarget);
     this.stopTurnTween(snapToTarget);
+    this.notifyPendingResolved();
   }
 
   /**
@@ -236,8 +273,16 @@ export class RobotRenderer {
    *
    * @param pose Continuous world coordinates and heading in radians
    * @param immediate If true, snaps immediately without tweens
+   * @param durationMs Optional duration override in milliseconds (scales with motor speed)
+   * @param onProgress Optional progress callback receiving interpolated pose on each tween frame
+   * @returns Promise that resolves when visual interpolation completes
    */
-  public renderWorld(pose: WorldRobotPose, immediate: boolean = false): void {
+  public renderWorld(
+    pose: WorldRobotPose,
+    immediate: boolean = false,
+    durationMs?: number,
+    onProgress?: (pose: WorldRobotPose) => void,
+  ): Promise<void> {
     const radius = this.config.robotRadius;
 
     // Draw robot graphics if not initialized or radius changed
@@ -258,7 +303,10 @@ export class RobotRenderer {
       this.container.setRotation(targetAngle);
       this.lastTargetAngle = targetAngle;
       this.isInitialized = true;
-      return;
+      if (onProgress) {
+        onProgress({x: targetX, y: targetY, rotation: targetAngle});
+      }
+      return Promise.resolve();
     }
 
     // ── Position Handling ──────────────────────────────────────────────
@@ -268,78 +316,134 @@ export class RobotRenderer {
     const dy = Math.abs(currentY - targetY);
     const hasMoved = dx > 0.5 || dy > 0.5;
 
-    if (hasMoved) {
-      this.stopMovementTween(false);
-      this.activeMoveTween = this.scene.tweens.add({
-        targets: this.container,
-        x: targetX,
-        y: targetY,
-        duration: this.config.moveDurationMs,
-        ease: 'Cubic.easeOut',
-        onComplete: () => {
-          this.activeMoveTween = null;
-        },
-      });
-    }
-
     // ── Rotation Handling ──────────────────────────────────────────────
     const hasTurned =
       this.lastTargetAngle === null ||
       Math.abs(this.getShortestAngleDelta(this.lastTargetAngle, targetAngle)) > 0.001;
 
-    if (hasTurned) {
-      this.lastTargetAngle = targetAngle;
-      this.stopTurnTween(false);
-
-      const currentRotation = this.container.rotation;
-      const angleDelta = this.getShortestAngleDelta(currentRotation, targetAngle);
-      const destinationAngle = currentRotation + angleDelta;
-
-      this.activeTurnTween = this.scene.tweens.add({
-        targets: this.container,
-        rotation: destinationAngle,
-        duration: this.config.turnDurationMs,
-        ease: 'Cubic.easeOut',
-        onComplete: () => {
-          this.activeTurnTween = null;
-          // Normalize rotation within (-PI, +PI]
-          const twoPi = Math.PI * 2;
-          let norm = destinationAngle % twoPi;
-          if (norm > Math.PI) norm -= twoPi;
-          else if (norm <= -Math.PI) norm += twoPi;
-          this.container.setRotation(norm);
-        },
-      });
+    if (!hasMoved && !hasTurned) {
+      if (onProgress) {
+        onProgress({x: currentX, y: currentY, rotation: this.container.rotation});
+      }
+      return Promise.resolve();
     }
+
+    // Stop previous tweens and flush prior awaiting resolvers before starting new step
+    if (hasMoved) {
+      this.stopMovementTween(false);
+    }
+    if (hasTurned) {
+      this.stopTurnTween(false);
+    }
+
+    return new Promise<void>((resolve) => {
+      let pendingAnimations = 0;
+      const onAnimFinished = () => {
+        pendingAnimations--;
+        if (pendingAnimations <= 0) {
+          this.pendingResolvers.delete(resolve);
+          resolve();
+        }
+      };
+
+      this.pendingResolvers.add(resolve);
+
+      if (hasMoved) {
+        pendingAnimations++;
+        const moveDur = durationMs !== undefined ? durationMs : this.config.moveDurationMs;
+        this.activeMoveTween = this.scene.tweens.add({
+          targets: this.container,
+          x: targetX,
+          y: targetY,
+          duration: moveDur,
+          ease: 'Cubic.easeOut',
+          onUpdate: () => {
+            if (onProgress) {
+              onProgress({
+                x: this.container.x,
+                y: this.container.y,
+                rotation: this.container.rotation,
+              });
+            }
+          },
+          onComplete: () => {
+            this.activeMoveTween = null;
+            onAnimFinished();
+          },
+        });
+      }
+
+      if (hasTurned) {
+        pendingAnimations++;
+        this.lastTargetAngle = targetAngle;
+
+        const currentRotation = this.container.rotation;
+        const angleDelta = this.getShortestAngleDelta(currentRotation, targetAngle);
+        const destinationAngle = currentRotation + angleDelta;
+        const turnDur = durationMs !== undefined ? durationMs : this.config.turnDurationMs;
+
+        this.activeTurnTween = this.scene.tweens.add({
+          targets: this.container,
+          rotation: destinationAngle,
+          duration: turnDur,
+          ease: 'Cubic.easeOut',
+          onUpdate: () => {
+            if (onProgress) {
+              onProgress({
+                x: this.container.x,
+                y: this.container.y,
+                rotation: this.container.rotation,
+              });
+            }
+          },
+          onComplete: () => {
+            this.activeTurnTween = null;
+            // Normalize rotation within (-PI, +PI]
+            const twoPi = Math.PI * 2;
+            let norm = destinationAngle % twoPi;
+            if (norm > Math.PI) norm -= twoPi;
+            else if (norm <= -Math.PI) norm += twoPi;
+            this.container.setRotation(norm);
+            this.lastTargetAngle = norm;
+            onAnimFinished();
+          },
+        });
+      }
+
+      if (pendingAnimations === 0) {
+        this.pendingResolvers.delete(resolve);
+        resolve();
+      }
+    });
   }
 
   /**
    * Backward-compatible render method for discrete grid RobotState.
    * Converts grid (col, row, direction) to world pose and delegates to renderWorld.
    */
-  public render(robot: RobotState, immediate: boolean = false): void {
+  public render(robot: RobotState, immediate: boolean = false): Promise<void> {
     if (this.coordinateConverter) {
       const targetPos = this.coordinateConverter.toWorldPosition(robot.x, robot.y);
       const targetAngle = this.directionToAngle(robot.direction);
       const cellSize = this.coordinateConverter.getCellSize();
       this.config.robotRadius = Math.max(12, Math.floor((cellSize - 12) / 2));
-      this.renderWorld({x: targetPos.x, y: targetPos.y, rotation: targetAngle}, immediate);
+      return this.renderWorld({x: targetPos.x, y: targetPos.y, rotation: targetAngle}, immediate);
     } else {
       const targetAngle = this.directionToAngle(robot.direction);
-      this.renderWorld({x: robot.x, y: robot.y, rotation: targetAngle}, immediate);
+      return this.renderWorld({x: robot.x, y: robot.y, rotation: targetAngle}, immediate);
     }
   }
 
   /**
    * Resets the robot visually immediately (no animation).
    */
-  public reset(pose: WorldRobotPose | RobotState): void {
+  public reset(pose: WorldRobotPose | RobotState): Promise<void> {
     this.stopMovementTween(false);
     this.stopTurnTween(false);
     if ('rotation' in pose) {
-      this.renderWorld(pose, true);
+      return this.renderWorld(pose, true);
     } else {
-      this.render(pose, true);
+      return this.render(pose, true);
     }
   }
 
@@ -415,6 +519,7 @@ export class RobotRenderer {
   public destroy(): void {
     this.stopMovementTween(false);
     this.stopTurnTween(false);
+    this.notifyPendingResolved();
     this.container.destroy(true);
   }
 }

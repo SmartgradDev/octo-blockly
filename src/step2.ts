@@ -18,6 +18,7 @@ import {ProgramInterpreter} from './robot/CommandExecutor';
 import {getMissionsByPhase, Mission, Position} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
 import {PhaserSimulator, PhaserSimulationBridge} from './simulator';
+import {WorldRobotPose} from './simulator/RobotRenderer';
 import {
   CAMPUS_TOWN_MAP,
   WorldRobotState,
@@ -25,6 +26,7 @@ import {
   WorldCommandExecutor,
   evaluateWorldMission,
   radiansToDegrees,
+  calculateStepDurationMs,
 } from './simulator/world';
 import octopusIcon from './assets/octopus-icon.png';
 import './index.css';
@@ -148,56 +150,72 @@ function directionArrow(dir: Direction): string {
 }
 
 /**
- * Updates the Step 2 visual presentation:
- * - Uses PhaserSimulationBridge to update Phaser GameObjects
- * - Updates DOM Telemetry HUD
+ * Updates the DOM Telemetry HUD with real-time pose, motor speed, and battery.
  */
-function updateStep2View(
+function updateTelemetryDisplay(
+  pose: {x: number; y: number; rotation: number},
   progressText?: string,
-  immediate: boolean = false,
 ): void {
-  // 1. Phaser Simulation Bridge (World Robot State -> Bridge -> Phaser Visual State)
-  if (simulationBridge) {
-    simulationBridge.onStateChange({
-      grid,
-      robot,
-      worldRobot,
-      mission: currentMission,
-      progressText,
-      immediate,
-    });
-  }
+  if (!telemetryHud) return;
+  const headingDeg = Math.round(radiansToDegrees(pose.rotation));
+  const posChip = `<div class="hud-chip hud-chip-pos"><span class="hud-icon">📍</span><span class="hud-label">X:${pose.x.toFixed(1)}, Y:${pose.y.toFixed(1)}</span></div>`;
+  const dirChip = `<div class="hud-chip hud-chip-dir"><span class="hud-icon">🧭</span><span class="hud-label">${headingDeg}° (${pose.rotation.toFixed(2)} rad)</span></div>`;
+  const speedChip = `<div class="hud-chip hud-chip-speed"><span class="hud-icon">⚡</span><span class="hud-label">${worldRobot.motorSpeedSetting}%</span></div>`;
 
-  // 2. DOM Telemetry HUD (outside Phaser canvas)
-  if (telemetryHud) {
-    const headingDeg = Math.round(radiansToDegrees(worldRobot.rotation));
-    const posChip = `<div class="hud-chip hud-chip-pos"><span class="hud-icon">📍</span><span class="hud-label">X:${worldRobot.x.toFixed(1)}, Y:${worldRobot.y.toFixed(1)}</span></div>`;
-    const dirChip = `<div class="hud-chip hud-chip-dir"><span class="hud-icon">🧭</span><span class="hud-label">${headingDeg}° (${worldRobot.rotation.toFixed(2)} rad)</span></div>`;
-    const speedChip = `<div class="hud-chip hud-chip-speed"><span class="hud-icon">⚡</span><span class="hud-label">${worldRobot.motorSpeedSetting}%</span></div>`;
-
-    let batChip = '';
-    if (worldRobot.battery !== undefined) {
-      const maxBat = worldRobot.maxBattery || 100;
-      const currentBat = Math.max(0, worldRobot.battery);
-      const batPct = Math.min(100, Math.round((currentBat / maxBat) * 100));
-      const batColor =
-        batPct > 50 ? 'battery-high' : batPct > 20 ? 'battery-mid' : 'battery-low';
-      batChip = `
+  let batChip = '';
+  if (worldRobot.battery !== undefined) {
+    const maxBat = worldRobot.maxBattery || 100;
+    const currentBat = Math.max(0, worldRobot.battery);
+    const batPct = Math.min(100, Math.round((currentBat / maxBat) * 100));
+    const batColor =
+      batPct > 50 ? 'battery-high' : batPct > 20 ? 'battery-mid' : 'battery-low';
+    batChip = `
         <div class="hud-chip hud-chip-battery ${batColor}">
           <span class="hud-icon">🔋</span>
           <span class="hud-label">${currentBat.toFixed(1)} / ${maxBat.toFixed(1)}</span>
           <div class="battery-gauge"><div class="battery-gauge-fill" style="width: ${batPct}%;"></div></div>
         </div>
       `;
-    }
-
-    let progBanner = '';
-    if (progressText) {
-      progBanner = `<div class="hud-progress-banner"><span class="prog-icon">🎯</span><span class="prog-text">${progressText}</span></div>`;
-    }
-
-    telemetryHud.innerHTML = posChip + dirChip + speedChip + batChip + progBanner;
   }
+
+  let progBanner = '';
+  if (progressText) {
+    progBanner = `<div class="hud-progress-banner"><span class="prog-icon">🎯</span><span class="prog-text">${progressText}</span></div>`;
+  }
+
+  telemetryHud.innerHTML = posChip + dirChip + speedChip + batChip + progBanner;
+}
+
+/**
+ * Updates the Step 2 visual presentation:
+ * - Uses PhaserSimulationBridge to update Phaser GameObjects
+ * - Updates DOM Telemetry HUD
+ * - Returns a Promise that resolves when visual animation finishes
+ */
+function updateStep2View(
+  progressText?: string,
+  immediate: boolean = false,
+  durationMs?: number,
+  onProgress?: (pose: WorldRobotPose) => void,
+): Promise<void> {
+  // 1. DOM Telemetry HUD
+  updateTelemetryDisplay(worldRobot, progressText);
+
+  // 2. Phaser Simulation Bridge
+  if (simulationBridge) {
+    return simulationBridge.onStateChange({
+      grid,
+      robot,
+      worldRobot,
+      mission: currentMission,
+      progressText,
+      immediate,
+      durationMs,
+      onProgress,
+    });
+  }
+
+  return Promise.resolve();
 }
 
 // ── Code inspector updater ──────────────────────────────────────────
@@ -459,6 +477,10 @@ const pauseProgram = () => {
   isPaused = true;
   accumulatedExecutionTime += performance.now() - lastStepTime;
   simulationBridge?.onPause();
+  const visualPose = simulationBridge?.getVisualPose();
+  if (visualPose) {
+    updateTelemetryDisplay(visualPose);
+  }
   updateControlButtons();
   setStatus('Simulation paused. Click Resume or ▶ to continue.');
 };
@@ -478,7 +500,18 @@ const stopProgram = () => {
   isPaused = false;
   isRunning = false;
   activeInterpreter = null;
-  simulationBridge?.onStop(true);
+  // Stop tweens in-place without snapping to forward destination
+  simulationBridge?.onStop(false);
+  const visualPose = simulationBridge?.getVisualPose();
+  if (visualPose) {
+    worldCommandExecutor.getAdapter().setPose(
+      worldRobot,
+      visualPose.x,
+      visualPose.y,
+      visualPose.rotation,
+    );
+    updateTelemetryDisplay(worldRobot);
+  }
   updateControlButtons();
   setStatus('Execution stopped.', 'error');
 };
@@ -576,16 +609,45 @@ const runProgram = async () => {
 
     currentEval = evaluateWorldMission(activeWorldMap, worldRobot);
 
-    updateStep2View(
-      currentEval.progressText,
-    );
-
     if (!result.ok) {
       hadError = true;
       setStatus(
         `Step ${executedCount} (${cmd}): ${result.message}`,
         'error',
       );
+      updateTelemetryDisplay(worldRobot, currentEval.progressText);
+      break;
+    }
+
+    // 2. Smooth continuous world movement & turning (Phaser 4 tweens)
+    const isTurn = cmd === 'TURN_LEFT' || cmd === 'TURN_RIGHT';
+    const durationMs = calculateStepDurationMs(
+      worldRobot.motorSpeedSetting,
+      isTurn,
+      worldCommandExecutor.getMovementConfig(),
+    );
+
+    setStatus(`Step ${executedCount} (${cmd}): ${result.message}`);
+
+    // Await visual interpolation completion before next command begins!
+    if (simulationBridge) {
+      await simulationBridge.onStateChange({
+        grid,
+        robot,
+        worldRobot,
+        mission: currentMission,
+        progressText: currentEval.progressText,
+        durationMs,
+        onProgress: (interPose) => {
+          updateTelemetryDisplay(interPose, currentEval.progressText);
+        },
+      });
+    }
+
+    // Synchronize telemetry with final authoritative pose
+    updateTelemetryDisplay(worldRobot, currentEval.progressText);
+
+    if (stopRequested) {
       break;
     }
 
@@ -630,12 +692,10 @@ const runProgram = async () => {
       if (nextMissionBtn) nextMissionBtn.style.display = 'inline-flex';
       if (sidebarNextBtn) sidebarNextBtn.style.display = 'inline-flex';
       break;
-    } else {
-      setStatus(`Step ${executedCount} (${cmd}): ${result.message}`);
     }
 
-    const stepDelay = Math.max(100, Math.round(800 - worldRobot.motorSpeedSetting * 7));
-    await delay(stepDelay);
+    // Brief inter-command settle delay
+    await delay(30);
   }
 
   const totalExecuted = activeInterpreter ? activeInterpreter.getExecutedCommandCount() : 0;
@@ -821,4 +881,5 @@ if (typeof window !== 'undefined') {
     return res;
   };
   (window as any).__step2GetWorldRobot = () => ({...worldRobot});
+  (window as any).__step2GetVisualPose = () => simulationBridge?.getVisualPose() || null;
 }

@@ -11,7 +11,7 @@
 import * as Phaser from 'phaser';
 import {GridConfig, RobotState} from '../robot/RobotState';
 import {Position, TargetPosition, ColoredCell} from '../robot/Mission';
-import {RobotRenderer, GridCoordinateConverter} from './RobotRenderer';
+import {RobotRenderer, GridCoordinateConverter, WorldRobotPose} from './RobotRenderer';
 
 import {WorldRobotState} from './world';
 
@@ -26,6 +26,8 @@ export interface GridRenderData {
   items?: Position[];
   collectedItems?: Position[];
   immediate?: boolean;
+  durationMs?: number;
+  onProgress?: (pose: WorldRobotPose) => void;
 }
 
 export class PhaserGridRenderer implements GridCoordinateConverter {
@@ -76,7 +78,7 @@ export class PhaserGridRenderer implements GridCoordinateConverter {
   /**
    * Main render call: maps simulation state to Phaser shapes and text
    */
-  public render(data: GridRenderData): void {
+  public render(data: GridRenderData): Promise<void> {
     const {width, height} = this.scene.scale;
     const {grid, robot, target, obstacles, cellColors, lines, items, collectedItems} = data;
 
@@ -203,11 +205,20 @@ export class PhaserGridRenderer implements GridCoordinateConverter {
 
     // 5. Delegate robot rendering to the dedicated RobotRenderer
     if (data.worldRobot) {
-      this.robotRenderer.renderWorld(data.worldRobot, data.immediate || false);
+      return this.robotRenderer.renderWorld(
+        data.worldRobot,
+        data.immediate || false,
+        data.durationMs,
+        data.onProgress,
+      );
     } else {
       this.robotRenderer.setCoordinateConverter(this);
-      this.robotRenderer.render(robot, data.immediate || false);
+      return this.robotRenderer.render(robot, data.immediate || false);
     }
+  }
+
+  public getVisualPose(): WorldRobotPose {
+    return this.robotRenderer.getCurrentVisualPose();
   }
 
   private createText(
