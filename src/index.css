@@ -180,6 +180,45 @@ body {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
 }
 
+.step-mode-switcher {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-card);
+  border-radius: 20px;
+  padding: 3px 6px;
+  gap: 4px;
+  font-size: 0.8rem;
+  margin-left: 8px;
+}
+
+.step-mode-switcher .mode-badge {
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.step-mode-switcher .mode-badge.active {
+  background: var(--primary);
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+}
+
+.step-mode-switcher .mode-link {
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.step-mode-switcher .mode-link:hover {
+  color: var(--primary);
+  background: rgba(37, 99, 235, 0.08);
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--text-muted);
@@ -440,6 +479,23 @@ body {
   align-items: center;
   gap: 10px;
   width: 100%;
+}
+
+.phaser-simulator-wrapper {
+  width: 100%;
+  margin-top: 12px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: #f8fafc;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.phaser-simulator-wrapper canvas {
+  display: block;
+  max-width: 100%;
 }
 
 .simulator-board-wrapper {

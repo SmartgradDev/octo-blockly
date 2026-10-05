@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OctoBlockly — Educational Robotics Studio</title>
+    <title>OctoBlockly — Step 2: Advanced Phaser Simulator</title>
   </head>
   <body>
     <!-- Top Application Bar -->
@@ -14,7 +14,7 @@
         </div>
         <div class="app-title-group">
           <h1 class="app-title">OctoBlockly</h1>
-          <span class="app-subtitle">Robotics Studio</span>
+          <span class="app-subtitle">Step 2: Phaser 4 Engine</span>
         </div>
       </div>
 
@@ -41,8 +41,8 @@
           <span>Next Mission</span> <span class="btn-icon">➔</span>
         </button>
         <div class="step-mode-switcher">
-          <span class="mode-badge active">Step 1: Basic</span>
-          <a href="step2.html" class="mode-link" title="Switch to Step 2: Advanced Phaser Simulator">Step 2: Phaser ➔</a>
+          <a href="index.html" class="mode-link" title="Switch to Step 1: Basic Simulator">⬅ Step 1: Basic</a>
+          <span class="mode-badge active">Step 2: Phaser</span>
         </div>
       </div>
     </header>
@@ -93,12 +93,16 @@
           </div>
         </div>
 
-        <!-- Robot Simulator Card -->
+        <!-- Step 2: Advanced Phaser 4 Robot Simulator Card -->
         <div class="sidebar-card simulator-card">
           <div class="simulator-card-header">
-            <span class="card-heading">🎮 Simulation Arena</span>
+            <span class="card-heading">🎮 Phaser 4 Simulation World</span>
+            <span class="meta-phase-badge" style="background:#e0e7ff; color:#4338ca;">Step 2</span>
           </div>
-          <div id="simulatorPane"></div>
+          <!-- Dedicated Phaser Canvas Mount Container -->
+          <div id="phaserSimulatorContainer" class="phaser-simulator-wrapper"></div>
+          <!-- Robot Telemetry HUD -->
+          <div id="telemetryHud" class="robot-hud robot-status"></div>
         </div>
 
         <!-- Simulator Quick Controls -->
@@ -116,7 +120,7 @@
 
         <!-- Results & Status Card -->
         <div id="statusMessage" class="status-card">
-          Program the robot to reach the star!
+          Program the robot in Phaser 4 Simulator!
         </div>
 
         <!-- Collapsible Code Inspector Card -->

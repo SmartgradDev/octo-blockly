@@ -3,10 +3,13 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 // Base config that applies to either development or production mode.
 const config = {
-  entry: './src/index.ts',
+  entry: {
+    index: './src/index.ts',
+    step2: './src/step2.ts',
+  },
   output: {
-    // Compile the source files into a bundle.
-    filename: 'bundle.js',
+    // Compile each entry file into its respective bundle.
+    filename: '[name].bundle.js',
     path: path.resolve(__dirname, 'dist'),
     clean: true,
   },
@@ -37,11 +40,18 @@ const config = {
     extensions: ['.tsx', '.ts', '.js'],
   },
   plugins: [
-    // Generate the HTML index page based on our template.
-    // This will output the same index page with the bundle we
-    // created above added in a script tag.
+    // Step 1: Basic Robot Programming (DOM table grid simulator)
     new HtmlWebpackPlugin({
+      filename: 'index.html',
       template: 'src/index.html',
+      chunks: ['index'],
+      favicon: 'src/assets/octopus-icon.png',
+    }),
+    // Step 2: Advanced Robot Simulator (Phaser 4 Engine simulator)
+    new HtmlWebpackPlugin({
+      filename: 'step2.html',
+      template: 'src/step2.html',
+      chunks: ['step2'],
       favicon: 'src/assets/octopus-icon.png',
     }),
   ],

@@ -8,7 +8,8 @@
     "module": "ES2015",
     "moduleResolution": "bundler",
     "target": "es6",
-    "strict": true
+    "strict": true,
+    "skipLibCheck": true
   },
   "include": ["src"]
 }

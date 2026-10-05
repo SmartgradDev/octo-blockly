@@ -1,7 +1,9 @@
 /**
- * @license
- * Copyright 2023 Google LLC
- * SPDX-License-Identifier: Apache-2.0
+ * Step 2: Advanced Robot Simulator (Phaser 4 Engine)
+ *
+ * Uses the exact same Shared Robot Engine (RobotState, CommandExecutor,
+ * MissionEvaluator, ScoringEngine, blocks, and Blockly generators).
+ * Step 2 mounts the isolated Phaser 4 visual engine instead of the DOM table grid.
  */
 
 import * as Blockly from 'blockly';
@@ -11,11 +13,12 @@ import {forBlock} from './generators/javascript';
 import {javascriptGenerator} from 'blockly/javascript';
 import {save, load} from './serialization';
 import {toolbox} from './toolbox';
-import {createRobotState, GridConfig} from './robot/RobotState';
-import {renderGrid} from './robot/GridRenderer';
+import {createRobotState, Direction, GridConfig} from './robot/RobotState';
 import {executeCommand, ProgramInterpreter} from './robot/CommandExecutor';
 import {getMissionsByPhase, Mission, Position} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
+import {evaluateMission, MissionRuntimeState} from './robot/MissionEvaluator';
+import {PhaserSimulator} from './simulator';
 import octopusIcon from './assets/octopus-icon.png';
 import './index.css';
 
@@ -51,7 +54,7 @@ const updateBestScore = (
   return {best: currentBest, isNewBest: false};
 };
 
-// ── Active Mission State & Configuration ────────────────────────────
+// ── Active Mission State & Configuration (Shared Robot Engine) ──────
 let activeMissionsList: Mission[] = getMissionsByPhase(1);
 let currentMission: Mission = activeMissionsList[0];
 
@@ -65,7 +68,8 @@ const robot = createRobotState(
   currentMission.start.direction,
 );
 
-const simulatorPane = document.getElementById('simulatorPane');
+const phaserContainer = document.getElementById('phaserSimulatorContainer');
+const telemetryHud = document.getElementById('telemetryHud');
 const missionTitleEl = document.getElementById('missionTitle');
 const missionDescEl = document.getElementById('missionDescription');
 const phaseSelect = document.getElementById('phaseSelect') as HTMLSelectElement | null;
@@ -75,29 +79,6 @@ const missionSelect = document.getElementById('missionSelect') as HTMLSelectElem
 const codeDiv = document.getElementById('generatedCode')?.firstChild;
 const blocklyDiv = document.getElementById('blocklyDiv');
 const statusMessage = document.getElementById('statusMessage');
-
-/**
- * Renders the Step 1 DOM table grid from authoritative simulation state.
- */
-function updateSimulatorView(
-  currentCollectedItems: Position[] = [],
-  progressText?: string,
-): void {
-  if (simulatorPane) {
-    renderGrid(
-      simulatorPane,
-      grid,
-      robot,
-      currentMission.target,
-      currentMission.obstacles,
-      currentMission.cellColors,
-      currentMission.lines,
-      currentMission.items,
-      currentCollectedItems,
-      progressText,
-    );
-  }
-}
 
 if (!blocklyDiv) {
   throw new Error(`div with id 'blocklyDiv' not found`);
@@ -112,7 +93,7 @@ const ws = Blockly.inject(blocklyDiv, {
     snap: true,
   },
   zoom: {
-    controls: false, // Using our custom floating toolbar controls
+    controls: false,
     wheel: true,
     startScale: 0.95,
     maxScale: 2.5,
@@ -121,14 +102,85 @@ const ws = Blockly.inject(blocklyDiv, {
     pinch: true,
   },
   trashcan: true,
-  move: {
-    scrollbars: true,
-    drag: true,
-    wheel: true,
-  },
+  renderer: 'zelos',
 });
 
-// ── Helper: update the generated code preview ───────────────────────
+// ── Step 2 Phaser Simulator Instance ─────────────────────────────────
+let phaserSimulator: PhaserSimulator | null = null;
+if (phaserContainer) {
+  phaserSimulator = new PhaserSimulator({
+    parent: phaserContainer,
+  });
+}
+
+function directionArrow(dir: Direction): string {
+  switch (dir) {
+    case 'NORTH':
+      return '▲';
+    case 'SOUTH':
+      return '▼';
+    case 'EAST':
+      return '▶';
+    case 'WEST':
+      return '◀';
+  }
+}
+
+/**
+ * Updates the Step 2 visual presentation:
+ * - Sends authoritative state snapshot to Phaser GridRenderer
+ * - Updates DOM Telemetry HUD
+ */
+function updateStep2View(
+  currentCollectedItems: Position[] = [],
+  progressText?: string,
+): void {
+  // 1. Phaser Visual Renderer
+  if (phaserSimulator) {
+    phaserSimulator.updateState({
+      grid,
+      robot,
+      target: currentMission.target,
+      obstacles: currentMission.obstacles,
+      cellColors: currentMission.cellColors,
+      lines: currentMission.lines,
+      items: currentMission.items,
+      collectedItems: currentCollectedItems,
+    });
+  }
+
+  // 2. DOM Telemetry HUD (outside Phaser canvas)
+  if (telemetryHud) {
+    const posChip = `<div class="hud-chip hud-chip-pos"><span class="hud-icon">📍</span><span class="hud-label">(${robot.x}, ${robot.y})</span></div>`;
+    const dirChip = `<div class="hud-chip hud-chip-dir"><span class="hud-icon">${directionArrow(robot.direction)}</span><span class="hud-label">${robot.direction}</span></div>`;
+    const speedChip = `<div class="hud-chip hud-chip-speed"><span class="hud-icon">⚡</span><span class="hud-label">${robot.motorSpeed}%</span></div>`;
+
+    let batChip = '';
+    if (robot.battery !== undefined) {
+      const maxBat = robot.maxBattery || 100;
+      const currentBat = Math.max(0, robot.battery);
+      const batPct = Math.min(100, Math.round((currentBat / maxBat) * 100));
+      const batColor =
+        batPct > 50 ? 'battery-high' : batPct > 20 ? 'battery-mid' : 'battery-low';
+      batChip = `
+        <div class="hud-chip hud-chip-battery ${batColor}">
+          <span class="hud-icon">🔋</span>
+          <span class="hud-label">${currentBat.toFixed(1)} / ${maxBat.toFixed(1)}</span>
+          <div class="battery-gauge"><div class="battery-gauge-fill" style="width: ${batPct}%;"></div></div>
+        </div>
+      `;
+    }
+
+    let progBanner = '';
+    if (progressText) {
+      progBanner = `<div class="hud-progress-banner"><span class="prog-icon">🎯</span><span class="prog-text">${progressText}</span></div>`;
+    }
+
+    telemetryHud.innerHTML = posChip + dirChip + speedChip + batChip + progBanner;
+  }
+}
+
+// ── Code inspector updater ──────────────────────────────────────────
 const updateCodePreview = () => {
   try {
     const code = javascriptGenerator.workspaceToCode(ws as Blockly.Workspace);
@@ -163,18 +215,6 @@ let isRunning = false;
 let stopRequested = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Helper to check if robot has reached mission target
-const isTargetReached = (): boolean => {
-  return (
-    robot.x === currentMission.target.x && robot.y === currentMission.target.y
-  );
-};
-
-import {
-  evaluateMission,
-  MissionRuntimeState,
-} from './robot/MissionEvaluator';
 
 // ── Helper: Load & switch mission ───────────────────────────────────
 const loadMission = (mission: Mission) => {
@@ -222,7 +262,6 @@ const loadMission = (mission: Mission) => {
     missionStepCounter.textContent = `Mission ${currentIdx + 1} of ${activeMissionsList.length}`;
   }
 
-  // Reset next mission action buttons
   const nextMissionBtn = document.getElementById('nextMissionBtn');
   const sidebarNextBtn = document.getElementById('sidebarNextBtn');
   if (nextMissionBtn) nextMissionBtn.style.display = 'none';
@@ -249,7 +288,7 @@ const loadMission = (mission: Mission) => {
 
   const initialEval = evaluateMission(mission, robot, initialRuntimeState);
 
-  updateSimulatorView(
+  updateStep2View(
     initialRuntimeState.collectedItems,
     initialEval.progressText,
   );
@@ -272,10 +311,9 @@ const loadMission = (mission: Mission) => {
 
   const best = getBestScore(mission.id);
   const bestStr = best !== null ? ` (Session Best: ${best})` : '';
-  setStatus(`Loaded ${mission.title}${bestStr}. Program the robot!`);
+  setStatus(`Loaded ${mission.title}${bestStr}. Program the robot in Step 2!`);
 };
 
-// Helper to populate Mission Selector Dropdown for active list
 const populateMissionDropdown = (missions: Mission[]) => {
   if (!missionSelect) return;
   missionSelect.innerHTML = '';
@@ -287,7 +325,6 @@ const populateMissionDropdown = (missions: Mission[]) => {
   });
 };
 
-// Helper to update missions list when phase changes
 const updateMissionsList = () => {
   const phaseId = phaseSelect ? parseInt(phaseSelect.value, 10) : 1;
   activeMissionsList = getMissionsByPhase(phaseId);
@@ -298,12 +335,10 @@ const updateMissionsList = () => {
   }
 };
 
-// Wire up Phase Selector
 if (phaseSelect) {
   phaseSelect.addEventListener('change', updateMissionsList);
 }
 
-// Wire up Mission Selector Dropdown
 if (missionSelect) {
   missionSelect.addEventListener('change', (e) => {
     const idx = parseInt((e.target as HTMLSelectElement).value, 10);
@@ -313,20 +348,17 @@ if (missionSelect) {
   });
 }
 
-// Initial setup
-populateMissionDropdown(activeMissionsList);
-loadMission(activeMissionsList[0]);
-
-// ── Run: step-by-step dynamic AST interpretation & execution ────────
+// ── Run Program Execution ───────────────────────────────────────────
 const runProgram = async () => {
   if (isRunning) return;
-  isRunning = true;
-  stopRequested = false;
 
   const runBtn = document.getElementById('runBtn') as HTMLButtonElement | null;
   const sidebarRunBtn = document.getElementById('sidebarRunBtn') as HTMLButtonElement | null;
   const runBtnText = document.getElementById('runBtnText');
   const sidebarRunText = document.querySelector('.sidebar-run-text');
+
+  isRunning = true;
+  stopRequested = false;
 
   if (runBtn) {
     runBtn.disabled = true;
@@ -339,7 +371,7 @@ const runProgram = async () => {
   if (runBtnText) runBtnText.textContent = 'Running...';
   if (sidebarRunText) sidebarRunText.textContent = 'Running...';
 
-  // Reset robot to initial mission state before starting run.
+  // Restore starting state
   robot.x = currentMission.start.x;
   robot.y = currentMission.start.y;
   robot.direction = currentMission.start.direction;
@@ -362,18 +394,17 @@ const runProgram = async () => {
 
   const checkCellVisit = () => {
     if (currentMission.items) {
-      for (const item of currentMission.items) {
-        if (
-          item.x === robot.x &&
-          item.y === robot.y &&
-          !runtimeState.collectedItems.some(
-            (ci) => ci.x === item.x && ci.y === item.y,
-          )
-        ) {
-          runtimeState.collectedItems.push(item);
-        }
+      const foundItem = currentMission.items.find(
+        (it) =>
+          it.x === robot.x &&
+          it.y === robot.y &&
+          !runtimeState.collectedItems.some((ci) => ci.x === it.x && ci.y === it.y),
+      );
+      if (foundItem) {
+        runtimeState.collectedItems.push({x: foundItem.x, y: foundItem.y});
       }
     }
+
     if (currentMission.cellColors) {
       const colorCell = currentMission.cellColors.find(
         (c) => c.x === robot.x && c.y === robot.y,
@@ -387,7 +418,7 @@ const runProgram = async () => {
   checkCellVisit();
   let currentEval = evaluateMission(currentMission, robot, runtimeState);
 
-  updateSimulatorView(
+  updateStep2View(
     runtimeState.collectedItems,
     currentEval.progressText,
   );
@@ -401,7 +432,7 @@ const runProgram = async () => {
     currentMission.lines,
   );
 
-  setStatus('Starting execution...');
+  setStatus('Starting execution in Phaser 4...');
 
   const startTime = performance.now();
   let hadError = false;
@@ -446,7 +477,7 @@ const runProgram = async () => {
     checkCellVisit();
     currentEval = evaluateMission(currentMission, robot, runtimeState);
 
-    updateSimulatorView(
+    updateStep2View(
       runtimeState.collectedItems,
       currentEval.progressText,
     );
@@ -501,7 +532,6 @@ const runProgram = async () => {
         'success',
       );
 
-      // Reveal next mission buttons
       const nextMissionBtn = document.getElementById('nextMissionBtn');
       const sidebarNextBtn = document.getElementById('sidebarNextBtn');
       if (nextMissionBtn) nextMissionBtn.style.display = 'inline-flex';
@@ -511,7 +541,6 @@ const runProgram = async () => {
       setStatus(`Step ${executedCount} (${cmd}): ${result.message}`);
     }
 
-    // Dynamic step delay scaling based on robot.motorSpeed (50 speed -> 450ms, 100 speed -> 100ms)
     const stepDelay = Math.max(100, Math.round(800 - robot.motorSpeed * 7));
     await delay(stepDelay);
   }
@@ -539,7 +568,6 @@ const runProgram = async () => {
   if (sidebarRunText) sidebarRunText.textContent = 'Run Program';
 };
 
-// ── Reset: restore the robot to its initial position & stop running ─
 const resetRobot = () => {
   stopRequested = true;
   isRunning = false;
@@ -587,17 +615,16 @@ const resetRobot = () => {
 
   const initialEval = evaluateMission(currentMission, robot, resetRuntimeState);
 
-  updateSimulatorView(
+  updateStep2View(
     resetRuntimeState.collectedItems,
     initialEval.progressText,
   );
 
   const best = getBestScore(currentMission.id);
   const bestStr = best !== null ? ` (Session Best: ${best})` : '';
-  setStatus(`Mission reset${bestStr}. Program the robot to reach the star!`);
+  setStatus(`Mission reset${bestStr}. Program the robot in Step 2!`);
 };
 
-// ── Next Mission Handler ────────────────────────────────────────────
 const handleNextMission = () => {
   const currentIdx = activeMissionsList.findIndex((m) => m.id === currentMission.id);
   if (currentIdx >= 0 && currentIdx < activeMissionsList.length - 1) {
@@ -607,35 +634,52 @@ const handleNextMission = () => {
     }
     loadMission(nextMission);
   } else {
-    // End of current phase: automatically proceed to next phase if available
-    const nextPhaseId = currentMission.phase + 1;
-    if (nextPhaseId <= 3 && phaseSelect) {
-      phaseSelect.value = nextPhaseId.toString();
-      updateMissionsList();
+    const currentPhase = currentMission.phase;
+    if (currentPhase < 3) {
+      const nextPhase = currentPhase + 1;
+      if (phaseSelect) {
+        phaseSelect.value = nextPhase.toString();
+      }
+      activeMissionsList = getMissionsByPhase(nextPhase);
+      populateMissionDropdown(activeMissionsList);
+      if (activeMissionsList.length > 0) {
+        loadMission(activeMissionsList[0]);
+      }
+    } else {
+      setStatus('🏆 Congratulations! You have completed all missions!', 'success');
     }
   }
 };
 
-// ── Collapsible Code Inspector Toggle ───────────────────────────────
-const toggleCodeInspector = () => {
-  const codeInspectorCard = document.getElementById('codeInspectorCard');
-  if (codeInspectorCard) {
-    codeInspectorCard.classList.toggle('is-collapsed');
-    updateCodePreview();
-  }
-};
-
-// ── Wire up buttons ─────────────────────────────────────────────────
+// Wire up event listeners
 document.getElementById('runBtn')?.addEventListener('click', runProgram);
 document.getElementById('sidebarRunBtn')?.addEventListener('click', runProgram);
 document.getElementById('resetBtn')?.addEventListener('click', resetRobot);
 document.getElementById('sidebarResetBtn')?.addEventListener('click', resetRobot);
 document.getElementById('nextMissionBtn')?.addEventListener('click', handleNextMission);
 document.getElementById('sidebarNextBtn')?.addEventListener('click', handleNextMission);
-document.getElementById('topCodeBtn')?.addEventListener('click', toggleCodeInspector);
-document.getElementById('codeInspectorToggle')?.addEventListener('click', toggleCodeInspector);
 
-// Floating Workspace Toolbar Wiring
+// Initialize missions
+populateMissionDropdown(activeMissionsList);
+loadMission(currentMission);
+
+// Collapsible Code Inspector Card
+const codeInspectorToggle = document.getElementById('codeInspectorToggle');
+const codeInspectorBody = document.getElementById('codeInspectorBody');
+const codeToggleIcon = document.getElementById('codeToggleIcon');
+const topCodeBtn = document.getElementById('topCodeBtn');
+
+const toggleCodeInspector = () => {
+  if (!codeInspectorBody) return;
+  const isOpen = codeInspectorBody.classList.toggle('is-open');
+  if (codeToggleIcon) codeToggleIcon.textContent = isOpen ? '▼' : '▶';
+  if (topCodeBtn) topCodeBtn.classList.toggle('active', isOpen);
+};
+
+codeInspectorToggle?.addEventListener('click', toggleCodeInspector);
+topCodeBtn?.addEventListener('click', toggleCodeInspector);
+
+// Workspace floating toolbar
 document.getElementById('wsZoomIn')?.addEventListener('click', () => {
   (ws as any).zoomCenter ? (ws as any).zoomCenter(1) : (ws as any).zoom?.(0, 0, 1);
 });
@@ -652,29 +696,20 @@ document.getElementById('wsRedo')?.addEventListener('click', () => {
   (ws as any).undo?.(true);
 });
 
-// Resize listener to keep Blockly canvas perfectly aligned
 window.addEventListener('resize', () => {
   Blockly.svgResize(ws as Blockly.WorkspaceSvg);
 });
 
 if (ws) {
-  // Load the initial state from storage.
   load(ws);
   updateCodePreview();
 
-  // Every time the workspace changes state, save the changes to storage.
   ws.addChangeListener((e: Blockly.Events.Abstract) => {
-    // UI events are things like scrolling, zooming, etc.
-    // No need to save after one of these.
     if (e.isUiEvent) return;
     save(ws);
   });
 
-  // Whenever the workspace changes meaningfully, update the code preview.
   ws.addChangeListener((e: Blockly.Events.Abstract) => {
-    // Don't update when the workspace finishes loading; we're
-    // already doing it once when the application starts.
-    // Don't update during drags; we might have invalid state.
     if (
       e.isUiEvent ||
       e.type == Blockly.Events.FINISHED_LOADING ||
@@ -685,4 +720,3 @@ if (ws) {
     updateCodePreview();
   });
 }
-
