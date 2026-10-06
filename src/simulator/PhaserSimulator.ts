@@ -80,6 +80,22 @@ export class PhaserSimulator {
   }
 
   /**
+   * Destroys the Phaser game instance, canvas, and WebGL resources cleanly.
+   */
+  public destroy(): void {
+    if (this.game) {
+      try {
+        this.game.destroy(true);
+      } catch (err) {
+        console.warn('[PhaserSimulator] Error destroying game instance:', err);
+      }
+      this.game = null;
+      this.scene = null;
+      this.pendingRenderData = null;
+    }
+  }
+
+  /**
    * Refreshes Phaser's scale manager when the container layout resizes.
    */
   public refreshScale(): void {
@@ -208,11 +224,4 @@ export class PhaserSimulator {
     return this.game;
   }
 
-  public destroy(): void {
-    if (this.game) {
-      this.game.destroy(true);
-      this.game = null;
-      this.scene = null;
-    }
-  }
 }

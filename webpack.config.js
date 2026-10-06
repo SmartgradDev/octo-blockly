@@ -11,11 +11,13 @@ const config = {
     // Compile each entry file into its respective bundle.
     filename: '[name].bundle.js',
     path: path.resolve(__dirname, 'dist'),
+    publicPath: '/',
     clean: true,
   },
-  // Enable webpack-dev-server to get hot refresh of the app.
+  // Enable webpack-dev-server to get hot refresh of the app and SPA client-side routing fallback.
   devServer: {
     static: './build',
+    historyApiFallback: true,
   },
   module: {
     rules: [
