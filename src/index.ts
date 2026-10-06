@@ -16,14 +16,27 @@ import {renderGrid} from './robot/GridRenderer';
 import {executeCommand, ProgramInterpreter} from './robot/CommandExecutor';
 import {getMissionsByPhase, Mission, Position} from './robot/Mission';
 import {calculateScore} from './robot/ScoringEngine';
+import {AppBootScreen} from './ui/AppBootScreen';
 import octopusIcon from './assets/octopus-icon.png';
 import './index.css';
+
+// ── Contextual Robotics Boot Screen Controller ───────────────────────
+const bootScreen = new AppBootScreen({
+  onReveal: () => {
+    if (typeof ws !== 'undefined' && ws) {
+      Blockly.svgResize(ws as Blockly.WorkspaceSvg);
+    }
+  },
+});
+
+bootScreen.startSubsystem('ui', 'Mounting application interface...', 15);
 
 // Set application header logo image
 const appLogoImg = document.getElementById('appLogoImg') as HTMLImageElement | null;
 if (appLogoImg) {
   appLogoImg.src = octopusIcon;
 }
+bootScreen.completeSubsystem('ui', 'UI controls & theme ready', 25);
 
 // Register the blocks and generator with Blockly
 Blockly.common.defineBlocks(blocks);
@@ -99,8 +112,11 @@ function updateSimulatorView(
   }
 }
 
+bootScreen.startSubsystem('blockly', 'Mounting Blockly visual programming workspace...', 35);
 if (!blocklyDiv) {
-  throw new Error(`div with id 'blocklyDiv' not found`);
+  const err = new Error(`div with id 'blocklyDiv' not found`);
+  bootScreen.fail(err, 'Blockly workspace container not found.');
+  throw err;
 }
 
 const ws = Blockly.inject(blocklyDiv, {
@@ -127,6 +143,9 @@ const ws = Blockly.inject(blocklyDiv, {
     wheel: true,
   },
 });
+
+bootScreen.completeSubsystem('blockly', 'Blockly workspace ready', 60);
+bootScreen.startSubsystem('simulator', 'Initializing grid simulation arena...', 75);
 
 // ── Helper: update the generated code preview ───────────────────────
 const updateCodePreview = () => {
@@ -685,4 +704,18 @@ if (ws) {
     updateCodePreview();
   });
 }
+
+// ── Final Boot Verification & Smooth Studio Reveal ───────────────────
+(async () => {
+  try {
+    bootScreen.completeSubsystem('simulator', 'Simulation arena ready', 85);
+    bootScreen.startSubsystem('robot', 'Calibrating robot telemetry & start pose...', 90);
+    bootScreen.completeSubsystem('robot', 'Robot ready for programming', 98);
+    await bootScreen.complete(200);
+  } catch (err: any) {
+    bootScreen.fail(err, 'Failed to initialize the robotics studio. Please retry.');
+  }
+})();
+
+(window as any).__indexGetBootScreen = () => bootScreen;
 

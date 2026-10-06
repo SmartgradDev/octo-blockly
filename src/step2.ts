@@ -29,14 +29,28 @@ import {
   radiansToDegrees,
   calculateStepDurationMs,
 } from './simulator/world';
+import {AppBootScreen} from './ui/AppBootScreen';
 import octopusIcon from './assets/octopus-icon.png';
 import './index.css';
+
+// ── Contextual Robotics Boot Screen Controller ───────────────────────
+const bootScreen = new AppBootScreen({
+  onReveal: () => {
+    if (typeof ws !== 'undefined' && ws) {
+      Blockly.svgResize(ws as Blockly.WorkspaceSvg);
+    }
+    phaserSimulator?.refreshScale();
+  },
+});
+
+bootScreen.startSubsystem('ui', 'Mounting application interface...', 15);
 
 // Set application header logo image
 const appLogoImg = document.getElementById('appLogoImg') as HTMLImageElement | null;
 if (appLogoImg) {
   appLogoImg.src = octopusIcon;
 }
+bootScreen.completeSubsystem('ui', 'UI controls & theme ready', 25);
 
 // Register the blocks and generator with Blockly
 Blockly.common.defineBlocks(blocks);
@@ -97,12 +111,15 @@ const phaseSelect = document.getElementById('phaseSelect') as HTMLSelectElement 
 const missionSelect = document.getElementById('missionSelect') as HTMLSelectElement | null;
 
 // Set up UI elements and inject Blockly
+bootScreen.startSubsystem('blockly', 'Mounting Blockly visual programming workspace...', 35);
 const codeDiv = document.getElementById('generatedCode')?.firstChild;
 const blocklyDiv = document.getElementById('blocklyDiv');
 const statusMessage = document.getElementById('statusMessage');
 
 if (!blocklyDiv) {
-  throw new Error(`div with id 'blocklyDiv' not found`);
+  const err = new Error(`div with id 'blocklyDiv' not found`);
+  bootScreen.fail(err, 'Blockly workspace container could not be found in DOM.');
+  throw err;
 }
 
 const ws = Blockly.inject(blocklyDiv, {
@@ -126,7 +143,10 @@ const ws = Blockly.inject(blocklyDiv, {
   renderer: 'zelos',
 });
 
+bootScreen.completeSubsystem('blockly', 'Blockly workspace ready', 55);
+
 // ── Step 2 Phaser Simulator & Bridge Instance ─────────────────────────
+bootScreen.startSubsystem('simulator', 'Booting Phaser 4 continuous world physics engine...', 65);
 let phaserSimulator: PhaserSimulator | null = null;
 let simulationBridge: PhaserSimulationBridge | null = null;
 
@@ -1163,6 +1183,7 @@ if (typeof window !== 'undefined') {
         break;
     }
   };
+  (window as any).__step2GetBootScreen = () => bootScreen;
 }
 
 // ── Simulator Floating Camera & Sound Toolbar ────────────────────────
@@ -1227,3 +1248,18 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
     phaserSimulator?.recenterCamera();
   }
 });
+
+// ── Final Boot Verification & Smooth Studio Reveal ───────────────────
+(async () => {
+  try {
+    bootScreen.startSubsystem('robot', 'Calibrating rover drive and world coordinates...', 80);
+    if (phaserSimulator) {
+      await phaserSimulator.whenReady();
+    }
+    bootScreen.completeSubsystem('simulator', 'Phaser 4 continuous world ready', 90);
+    bootScreen.completeSubsystem('robot', 'Campus Town geometry & rover calibrated', 98);
+    await bootScreen.complete(220);
+  } catch (err: any) {
+    bootScreen.fail(err, 'Failed to initialize the robotics simulation environment. Please retry.');
+  }
+})();

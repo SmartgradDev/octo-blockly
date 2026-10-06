@@ -4,8 +4,179 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OctoBlockly — Educational Robotics Studio</title>
+    <!-- Critical Frame 0 Styles: Guarantees zero FOUC before JS/CSS bundles download -->
+    <style id="criticalBootStyle">
+      body.app-booting {
+        margin: 0;
+        padding: 0;
+        background-color: #0b1120 !important;
+        overflow: hidden !important;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      body.app-booting #appRoot {
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        max-height: 0 !important;
+        overflow: hidden !important;
+      }
+      #appRoot {
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .boot-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 999999;
+        background: radial-gradient(circle at 50% 35%, #0f172a 0%, #0b1120 70%, #020617 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #f8fafc;
+        user-select: none;
+      }
+    </style>
   </head>
-  <body>
+  <body class="app-booting">
+    <!-- Contextual Robotics Boot Screen -->
+    <div id="appBootScreen" class="boot-screen" role="status" aria-live="polite">
+      <div class="boot-backdrop">
+        <div class="boot-grid-pattern"></div>
+        <div class="boot-glow-spot"></div>
+      </div>
+
+      <div class="boot-card">
+        <!-- Brand Header -->
+        <div class="boot-brand">
+          <div class="boot-logo-badge">
+            <svg class="boot-logo-svg" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="16" cy="16" r="14" stroke="#38bdf8" stroke-width="2" stroke-dasharray="3 3"/>
+              <path d="M16 6C10.477 6 6 10.477 6 16C6 21.523 10.477 26 16 26C21.523 26 26 21.523 26 16C26 10.477 21.523 6 16 6Z" fill="#1e293b"/>
+              <circle cx="12" cy="14" r="2.5" fill="#38bdf8"/>
+              <circle cx="20" cy="14" r="2.5" fill="#38bdf8"/>
+              <circle cx="12.5" cy="13.5" r="0.8" fill="#ffffff"/>
+              <circle cx="20.5" cy="13.5" r="0.8" fill="#ffffff"/>
+              <path d="M12 20C13.2 21.2 14.8 21.5 16 21.5C17.2 21.5 18.8 21.2 20 20" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="boot-brand-text">
+            <h1 class="boot-title">OCTO-BLOCKLY</h1>
+            <span class="boot-subtitle">Educational Robotics Studio · Basic Simulator</span>
+          </div>
+        </div>
+
+        <!-- Central Animated Rover Schematic -->
+        <div class="boot-rover-container">
+          <svg class="boot-rover-svg" viewBox="0 0 150 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="scanGrad" x1="95" y1="50" x2="145" y2="50" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.65"/>
+                <stop offset="60%" stop-color="#0284c7" stop-opacity="0.25"/>
+                <stop offset="100%" stop-color="#0284c7" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+
+            <!-- Forward Optical Sensor Sweep Cone -->
+            <path class="rover-scan-beam" d="M95 50 L145 22 L145 78 Z" fill="url(#scanGrad)"/>
+
+            <!-- 4 All-Terrain Wheels with Synchronized Treads -->
+            <rect x="24" y="10" width="28" height="15" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+            <line x1="28" y1="17.5" x2="48" y2="17.5" stroke="#38bdf8" stroke-width="1.5" class="rover-tread-marks"/>
+            <rect x="68" y="10" width="28" height="15" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+            <line x1="72" y1="17.5" x2="92" y2="17.5" stroke="#38bdf8" stroke-width="1.5" class="rover-tread-marks"/>
+            <rect x="24" y="75" width="28" height="15" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+            <line x1="28" y1="82.5" x2="48" y2="82.5" stroke="#38bdf8" stroke-width="1.5" class="rover-tread-marks"/>
+            <rect x="68" y="75" width="28" height="15" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+            <line x1="72" y1="82.5" x2="92" y2="82.5" stroke="#38bdf8" stroke-width="1.5" class="rover-tread-marks"/>
+
+            <!-- Structural Aluminum Rails -->
+            <rect x="34" y="20" width="52" height="6" rx="2" fill="#334155"/>
+            <rect x="34" y="74" width="52" height="6" rx="2" fill="#334155"/>
+
+            <!-- Armored Hull -->
+            <rect x="30" y="25" width="60" height="50" rx="8" fill="#1e3a8a" stroke="#2563eb" stroke-width="1.5"/>
+
+            <!-- Embedded Electronics PCB Bay -->
+            <rect x="38" y="32" width="44" height="36" rx="5" fill="#0f172a"/>
+            <path d="M42 40 H50 V46 H54" stroke="#0284c7" stroke-width="1" stroke-linecap="round"/>
+            <path d="M42 60 H50 V54 H54" stroke="#0284c7" stroke-width="1" stroke-linecap="round"/>
+            <path d="M66 46 H70 V40 H76" stroke="#0284c7" stroke-width="1" stroke-linecap="round"/>
+            <path d="M66 54 H70 V60 H76" stroke="#0284c7" stroke-width="1" stroke-linecap="round"/>
+
+            <!-- Central LiDAR Scanner Turret with Pulse -->
+            <circle cx="60" cy="50" r="8" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+            <circle cx="60" cy="50" r="4" fill="#0284c7" class="rover-core-led"/>
+            <circle class="rover-lidar-ring" cx="60" cy="50" r="5" fill="none" stroke="#38bdf8" stroke-width="1.2"/>
+
+            <!-- Front Crash Bumper Plate -->
+            <rect x="88" y="28" width="8" height="44" rx="3" fill="#1e293b" stroke="#0f172a" stroke-width="1.5"/>
+            <rect x="94" y="34" width="2" height="32" fill="#475569"/>
+
+            <!-- Stereo Ultrasonic Optical Eyes -->
+            <circle cx="94" cy="38" r="3.5" fill="#64748b" stroke="#0f172a" stroke-width="1"/>
+            <circle cx="94" cy="38" r="2" fill="#38bdf8"/>
+            <circle cx="94" cy="62" r="3.5" fill="#64748b" stroke="#0f172a" stroke-width="1"/>
+            <circle cx="94" cy="62" r="2" fill="#38bdf8"/>
+
+            <!-- Rear Status Indicators -->
+            <circle cx="33" cy="35" r="1.8" fill="#f59e0b"/>
+            <circle cx="33" cy="65" r="1.8" fill="#10b981"/>
+          </svg>
+        </div>
+
+        <!-- Telemetry & Status Header -->
+        <div class="boot-status-header">
+          <div class="boot-status-row">
+            <span id="bootStatusText" class="boot-status-text">Booting Robotics Simulation Arena...</span>
+            <span id="bootProgressPercent" class="boot-status-percent">15%</span>
+          </div>
+          <div id="bootTelemetryText" class="boot-telemetry-text">INIT // CALIBRATING SYSTEM BUS</div>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div class="boot-progress-track">
+          <div id="bootProgressFill" class="boot-progress-fill" style="width: 15%;">
+            <span class="boot-progress-glow"></span>
+          </div>
+        </div>
+
+        <!-- Subsystems Readiness Grid -->
+        <div class="boot-subsystems-grid">
+          <div class="boot-subsystem-pill active" data-subsystem="ui">
+            <span class="pill-dot"></span>
+            <span class="pill-label">UI Interface</span>
+          </div>
+          <div class="boot-subsystem-pill" data-subsystem="blockly">
+            <span class="pill-dot"></span>
+            <span class="pill-label">Blockly AST</span>
+          </div>
+          <div class="boot-subsystem-pill" data-subsystem="simulator">
+            <span class="pill-dot"></span>
+            <span class="pill-label">Grid Arena</span>
+          </div>
+          <div class="boot-subsystem-pill" data-subsystem="robot">
+            <span class="pill-dot"></span>
+            <span class="pill-label">Robot Telemetry</span>
+          </div>
+        </div>
+
+        <!-- Error Card (Hidden during normal boot) -->
+        <div id="bootErrorCard" class="boot-error-card" style="display: none;">
+          <div class="boot-error-icon">⚠️</div>
+          <h3 class="boot-error-title">Robot Simulator Couldn't Start</h3>
+          <p id="bootErrorMessage" class="boot-error-msg">An unexpected issue occurred while initializing the simulation environment.</p>
+          <div class="boot-error-actions">
+            <button id="bootRetryBtn" class="boot-btn boot-btn-primary">↺ Retry Initialization</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Application Container (Zero-FOUC: Kept hidden until systems are fully ready) -->
+    <div id="appRoot" class="app-root">
     <!-- Top Application Bar -->
     <header id="topAppBar">
       <div class="app-branding">
@@ -151,5 +322,6 @@
         <div id="blocklyDiv"></div>
       </main>
     </div>
+    </div> <!-- /#appRoot -->
   </body>
 </html>

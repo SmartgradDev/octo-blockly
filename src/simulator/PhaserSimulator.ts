@@ -12,18 +12,27 @@ export class PhaserSimulator {
   private game: Phaser.Game | null = null;
   private scene: RobotSimulatorScene | null = null;
   private pendingRenderData: GridRenderData | null = null;
+  private readyPromise: Promise<void>;
+  private resolveReady!: () => void;
+  private rejectReady!: (err: Error) => void;
 
   constructor(options: PhaserSimulatorOptions) {
+    this.readyPromise = new Promise<void>((resolve, reject) => {
+      this.resolveReady = resolve;
+      this.rejectReady = reject;
+    });
+
     const parent =
       typeof options.parent === 'string'
         ? document.getElementById(options.parent)
         : options.parent;
 
     if (!parent) {
-      console.warn(
-        `[PhaserSimulator] Mount target element not found:`,
-        options.parent,
+      const err = new Error(
+        `[PhaserSimulator] Mount target element not found: ${options.parent}`,
       );
+      console.warn(err.message);
+      this.rejectReady(err);
       return;
     }
 
@@ -31,30 +40,43 @@ export class PhaserSimulator {
   }
 
   private initGame(parent: HTMLElement): void {
-    const sceneInstance = new RobotSimulatorScene();
-    this.scene = sceneInstance;
+    try {
+      const sceneInstance = new RobotSimulatorScene();
+      this.scene = sceneInstance;
 
-    const config: Phaser.Types.Core.GameConfig = {
-      type: Phaser.AUTO,
-      parent: parent,
-      transparent: true,
-      scale: {
-        mode: Phaser.Scale.RESIZE,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        width: '100%',
-        height: '100%',
-      },
-      scene: [sceneInstance],
-    };
+      const config: Phaser.Types.Core.GameConfig = {
+        type: Phaser.AUTO,
+        parent: parent,
+        transparent: true,
+        scale: {
+          mode: Phaser.Scale.RESIZE,
+          autoCenter: Phaser.Scale.CENTER_BOTH,
+          width: '100%',
+          height: '100%',
+        },
+        scene: [sceneInstance],
+      };
 
-    this.game = new Phaser.Game(config);
+      this.game = new Phaser.Game(config);
 
-    // Apply pending render data when scene is ready
-    this.game.events.once('ready', () => {
-      if (this.pendingRenderData && this.scene) {
-        this.scene.updateSimulationState(this.pendingRenderData);
-      }
-    });
+      // Apply pending render data when scene is ready
+      this.game.events.once('ready', () => {
+        if (this.pendingRenderData && this.scene) {
+          this.scene.updateSimulationState(this.pendingRenderData);
+        }
+        this.resolveReady();
+      });
+    } catch (err: any) {
+      console.error('[PhaserSimulator] Failed to initialize Phaser engine:', err);
+      this.rejectReady(err instanceof Error ? err : new Error(String(err)));
+    }
+  }
+
+  /**
+   * Resolves when the Phaser engine has finished booting and the scene is ready.
+   */
+  public whenReady(): Promise<void> {
+    return this.readyPromise;
   }
 
   /**
